@@ -90,6 +90,7 @@ def main(argv):
                              help='Print debugging messages.')
     args_common.add_argument('--config-file',
                              default=None,
+                             action='append',
                              dest='gitlab_config_file',
                              help='GitLab configuration file.')
     args_common.add_argument('--instance',
@@ -199,11 +200,6 @@ def main(argv):
     if config.action == 'help':
         args.print_help()
         return
-
-    if config.gitlab_config_file:
-        config.gitlab_config_file = [config.gitlab_config_file]
-    else:
-        config.gitlab_config_file = ['/etc/python-gitlab.cfg', '~/.python-gitlab.cfg']
 
     glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
 
