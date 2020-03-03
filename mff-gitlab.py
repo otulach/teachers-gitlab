@@ -188,6 +188,7 @@ def main(argv):
                                  help='Currently only "devel" is recognized.')
 
     if len(argv) < 1:
+        # pylint: disable=too-few-public-methods
         class HelpConfig:
             def __init__(self):
                 self.action = 'help'
