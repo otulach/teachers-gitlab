@@ -17,7 +17,11 @@ def load_users(path):
 def as_gitlab_users(gl, users, login_column):
     for user in users:
         user_login = user.get(login_column)
-        user_obj = gl.users.list(username=user_login)[0]
+        matching_users = gl.users.list(username=user_login)
+        if len(matching_users) == 0:
+            print("WARNING: user {} not found!".format(user_login))
+            continue
+        user_obj = matching_users[0]
         user_obj.row = user
         yield user_obj
 
