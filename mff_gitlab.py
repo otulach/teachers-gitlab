@@ -25,13 +25,12 @@ def as_gitlab_users(glb, users, login_column):
         user_obj.row = user
         yield user_obj
 
-def action_fork(glb, config):
-    users = load_users(config.csv_users)
 
-    from_project = dg.get_canonical_project(glb, config.fork_from)
+def action_fork(glb, users, from_project, to_project_template, hide_fork):
+    from_project = dg.get_canonical_project(glb, from_project)
 
-    for user in as_gitlab_users(glb, users, config.csv_users_login_column):
-        to_full_path = config.fork_to.format(**user.row)
+    for user in users:
+        to_full_path = to_project_template.format(**user.row)
         to_namespace = os.path.dirname(to_full_path)
         to_name = os.path.basename(to_full_path)
 
@@ -40,31 +39,27 @@ def action_fork(glb, config):
                                                        user.username))
         to_project = dg.fork_project_idempotent(glb, from_project, to_namespace, to_name)
 
-        if config.fork_hide_relationship:
+        if hide_fork:
             dg.remove_fork_relationship(glb, to_project)
 
 
-def action_unprotect_branch(glb, config):
-    users = load_users(config.csv_users)
-
-    for user in as_gitlab_users(glb, users, config.csv_users_login_column):
-        project_path = config.project_path.format(**user.row)
+def action_unprotect_branch(glb, users, project_template, branch_name):
+    for user in users:
+        project_path = project_template.format(**user.row)
         project = dg.get_canonical_project(glb, project_path)
 
-        branch = project.branches.get(config.project_branch)
+        branch = project.branches.get(branch_name)
         print("Unprotecting branch {} on {}".format(branch.name, project.path_with_namespace))
         branch.unprotect()
 
-def action_add_member(glb, config):
-    users = load_users(config.csv_users)
-
-    if config.access_level == 'devel':
+def action_add_member(glb, users, project_template, access_level):
+    if access_level == 'devel':
         level = gitlab.DEVELOPER_ACCESS
     else:
         raise Exception("Unsupported access level.")
 
-    for user in as_gitlab_users(glb, users, config.csv_users_login_column):
-        project_path = config.project_path.format(**user.row)
+    for user in users:
+        project_path = project_template.format(**user.row)
         project = dg.get_canonical_project(glb, project_path)
 
         try:
@@ -185,12 +180,27 @@ def main(argv):
 
     glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
 
+    # These actions require that we prepare list of users
+    if config.action in ['fork', 'unprotect', 'add-member']:
+        users_csv = load_users(config.csv_users)
+        users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
+
     if config.action == 'fork':
-        action_fork(glb, config)
+        action_fork(glb,
+                    users,
+                    config.fork_from,
+                    config.fork_to,
+                    config.fork_hide_relationship)
     elif config.action == 'unprotect':
-        action_unprotect_branch(glb, config)
+        action_unprotect_branch(glb,
+                                users,
+                                config.project_path,
+                                config.project_branch)
     elif config.action == 'add-member':
-        action_add_member(glb, config)
+        action_add_member(glb,
+                          users,
+                          config.project_path,
+                          config.access_level)
     else:
         raise Exception("Unknown action.")
 
