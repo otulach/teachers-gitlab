@@ -25,6 +25,9 @@ def as_gitlab_users(glb, users, login_column):
         user_obj.row = user
         yield user_obj
 
+def action_accounts(glb, users):
+    for user in users:
+        pass
 
 def action_fork(glb, users, from_project, to_project_template, hide_fork):
     from_project = dg.get_canonical_project(glb, from_project)
@@ -112,6 +115,11 @@ def main(argv):
     args_help = args_sub.add_parser('help', help='Show this help.')
     args_help.set_defaults(action='help')
 
+    args_accounts = args_sub.add_parser('accounts',
+                                        help='List accounts that were not found.',
+                                        parents=[args_common, args_users])
+    args_accounts.set_defaults(action='accounts')
+
     args_fork = args_sub.add_parser('fork',
                                     help='Fork one repo multiple times.',
                                     parents=[args_common, args_users])
@@ -181,11 +189,13 @@ def main(argv):
     glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
 
     # These actions require that we prepare list of users
-    if config.action in ['fork', 'unprotect', 'add-member']:
+    if config.action in ['accounts', 'fork', 'unprotect', 'add-member']:
         users_csv = load_users(config.csv_users)
         users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
 
-    if config.action == 'fork':
+    if config.action == 'accounts':
+        action_accounts(glb, users)
+    elif config.action == 'fork':
         action_fork(glb,
                     users,
                     config.fork_from,
