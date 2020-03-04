@@ -98,6 +98,18 @@ def main(argv):
                              dest='gitlab_instance',
                              help='Which GitLab instance to choose.')
 
+    args_users = argparse.ArgumentParser(add_help=False)
+    args_users.add_argument('--users',
+                            required=True,
+                            dest='csv_users',
+                            metavar='LIST.csv',
+                            help='CSV with users.')
+    args_users.add_argument('--login-column',
+                            dest='csv_users_login_column',
+                            default='login',
+                            metavar='COLUMN_NAME',
+                            help='Column name with login information')
+
     args = argparse.ArgumentParser(description='MFF GitLab Wrapper')
     args.set_defaults(action='help')
     args_sub = args.add_subparsers(help='Select what to do')
@@ -107,18 +119,8 @@ def main(argv):
 
     args_fork = args_sub.add_parser('fork',
                                     help='Fork one repo multiple times.',
-                                    parents=[args_common])
+                                    parents=[args_common, args_users])
     args_fork.set_defaults(action='fork')
-    args_fork.add_argument('--users',
-                           required=True,
-                           dest='csv_users',
-                           metavar='LIST.csv',
-                           help='CSV with users.')
-    args_fork.add_argument('--login-column',
-                           dest='csv_users_login_column',
-                           default='login',
-                           metavar='COLUMN_NAME',
-                           help='Column name with login information')
     args_fork.add_argument('--from',
                            required=True,
                            dest='fork_from',
@@ -138,18 +140,8 @@ def main(argv):
 
     args_unprotect = args_sub.add_parser('unprotect',
                                          help='Unprotect branch on multiple projects.',
-                                         parents=[args_common])
+                                         parents=[args_common, args_users])
     args_unprotect.set_defaults(action='unprotect')
-    args_unprotect.add_argument('--users',
-                                required=True,
-                                dest='csv_users',
-                                metavar='LIST.csv',
-                                help='CSV with users.')
-    args_unprotect.add_argument('--login-column',
-                                dest='csv_users_login_column',
-                                default='login',
-                                metavar='COLUMN_NAME',
-                                help='Column name with login information')
     args_unprotect.add_argument('--project',
                                 required=True,
                                 dest='project_path',
@@ -164,18 +156,8 @@ def main(argv):
 
     args_add_member = args_sub.add_parser('add-member',
                                           help='Add member on multiple projects.',
-                                          parents=[args_common])
+                                          parents=[args_common, args_users])
     args_add_member.set_defaults(action='add-member')
-    args_add_member.add_argument('--users',
-                                 required=True,
-                                 dest='csv_users',
-                                 metavar='LIST.csv',
-                                 help='CSV with users.')
-    args_add_member.add_argument('--login-column',
-                                 dest='csv_users_login_column',
-                                 default='login',
-                                 metavar='COLUMN_NAME',
-                                 help='Column name with login information')
     args_add_member.add_argument('--project',
                                  required=True,
                                  dest='project_path',
