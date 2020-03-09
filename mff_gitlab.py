@@ -6,6 +6,7 @@ import locale
 import sys
 import http
 import os
+from pathlib import Path
 import gitlab
 import d3s.gitlab as dg
 
@@ -76,6 +77,22 @@ def action_add_member(glb, users, project_template, access_level):
                 pass
             else:
                 print(" -> error: {}".format(exp))
+
+def action_put_file(glb, users, project_template, from_file_template, to_file_template, branch, commit_message_template):
+    for user in users:
+        project_path = project_template.format(**user.row)
+        from_file = from_file_template.format(**user.row)
+        to_file = to_file_template.format(**user.row)
+        extras = {
+            'target_filename': to_file,
+        }
+        commit_message = commit_message_template.format(GL=extras, **user.row)
+
+        project = dg.get_canonical_project(glb, project_path)
+        from_file_content = Path(from_file).read_text()
+
+        print("Uploading {} to {} as {}".format(project.path_with_namespace, from_file, to_file))
+        dg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
 
 def main(argv):
     locale.setlocale(locale.LC_ALL, '')
@@ -173,6 +190,37 @@ def main(argv):
                                  metavar='LEVEL',
                                  help='Currently only "devel" is recognized.')
 
+    args_put_file = args_sub.add_parser('put-file',
+                                        help='Upload file to multiple repos.',
+                                        parents=[args_common, args_users])
+    args_put_file.set_defaults(action='put-file')
+    args_put_file.add_argument('--project',
+                               required=True,
+                               dest='project_path',
+                               metavar='PROJECT_PATH_WITH_FORMAT',
+                               help='Project path, including ' \
+                                    'formatting characters from CSV columns.')
+    args_put_file.add_argument('--from',
+                               required=True,
+                               dest='file_from',
+                               metavar='LOCAL_FILE_PATH_WITH_FORMAT',
+                               help='Local file path, including formatting.')
+    args_put_file.add_argument('--to',
+                               required=True,
+                               dest='file_to',
+                               metavar='REMOTE_FILE_PATH_WITH_FORMAT',
+                               help='Remote file path, including formatting.')
+    args_put_file.add_argument('--branch',
+                               default='master',
+                               dest='project_branch',
+                               metavar='BRANCH',
+                               help='Branch to commit to, defaults to master.')
+    args_put_file.add_argument('--message',
+                               default='Updating {GL[target_filename]}',
+                               dest='commit_message',
+                               metavar='COMMIT_MESSAGE_WITH_FORMAT',
+                               help='Commit message, including formatting.')
+
     if len(argv) < 1:
         # pylint: disable=too-few-public-methods
         class HelpConfig:
@@ -189,7 +237,7 @@ def main(argv):
     glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
 
     # These actions require that we prepare list of users
-    if config.action in ['accounts', 'fork', 'unprotect', 'add-member']:
+    if config.action in ['accounts', 'fork', 'unprotect', 'add-member', 'put-file']:
         users_csv = load_users(config.csv_users)
         users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
 
@@ -211,6 +259,14 @@ def main(argv):
                           users,
                           config.project_path,
                           config.access_level)
+    elif config.action == 'put-file':
+        action_put_file(glb,
+                        users,
+                        config.project_path,
+                        config.file_from,
+                        config.file_to,
+                        config.project_branch,
+                        config.commit_message)
     else:
         raise Exception("Unknown action.")
 

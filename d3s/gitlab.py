@@ -42,3 +42,25 @@ def remove_fork_relationship(glb, project):
             pass
         else:
             raise
+
+def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_message):
+    project = get_canonical_project(glb, project)
+    commit_data = {
+        'branch': branch,
+        'commit_message': commit_message,
+        'actions': [
+            {
+                'action': 'create',
+                'file_path': file_path,
+                'content': file_contents,
+            },
+        ],
+    }
+    try:
+        return project.commits.create(commit_data)
+    except gitlab.exceptions.GitlabCreateError as exp:
+        if exp.response_code == http.HTTPStatus.BAD_REQUEST:
+            commit_data['actions'][0]['action'] = 'update'
+            return project.commits.create(commit_data)
+        else:
+            raise
