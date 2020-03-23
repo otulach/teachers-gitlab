@@ -7,6 +7,7 @@ import sys
 import http
 import os
 from pathlib import Path
+import time
 import gitlab
 import d3s.gitlab as dg
 
@@ -98,6 +99,19 @@ def action_put_file(glb, users,
 
         print("Uploading {} to {} as {}".format(project.path_with_namespace, from_file, to_file))
         dg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
+
+def action_clone(glb, users,
+                 project_template,
+                 local_path_template,
+                 branch,
+                 deadline):
+    for user in users:
+        project = project_template.format(**user.row)
+        local_path = local_path_template.format(**user.row)
+
+        last_commit = dg.get_commit_before_deadline(glb, project, deadline, branch)
+        dg.clone_or_fetch(glb, project, local_path)
+        dg.reset_to_commit(local_path, last_commit.id)
 
 def main(argv):
     locale.setlocale(locale.LC_ALL, '')
@@ -226,6 +240,34 @@ def main(argv):
                                metavar='COMMIT_MESSAGE_WITH_FORMAT',
                                help='Commit message, including formatting.')
 
+    args_clone = args_sub.add_parser('clone',
+                                     help='Clone multiple repos.',
+                                     parents=[args_common, args_users])
+    args_clone.set_defaults(action='clone')
+    args_clone.add_argument('--project',
+                            required=True,
+                            dest='project_path',
+                            metavar='PROJECT_PATH_WITH_FORMAT',
+                            help='Project path, including ' \
+                                 'formatting characters from CSV columns.')
+    args_clone.add_argument('--to',
+                            required=True,
+                            dest='clone_to',
+                            metavar='LOCAL_PATH_WITH_FORMAT',
+                            help='Local repository path, including ' \
+                                'formatting characters from CSV columns.')
+    args_clone.add_argument('--branch',
+                            default='master',
+                            dest='project_branch',
+                            metavar='BRANCH',
+                            help='Branch to checkout.')
+    args_clone.add_argument('--deadline',
+                            default=time.strftime('%Y-%m-%dT%H:%M:S%z'),
+                            dest='deadline',
+                            metavar='YYYY-MM-DDTHH:MM:SSZ',
+                            help='Submission deadline, ' \
+                                'take last commit before deadline (defaults to now).')
+
     if len(argv) < 1:
         # pylint: disable=too-few-public-methods
         class HelpConfig:
@@ -242,12 +284,19 @@ def main(argv):
     glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
 
     # These actions require that we prepare list of users
-    if config.action in ['accounts', 'fork', 'unprotect', 'add-member', 'put-file']:
+    if config.action in ['accounts', 'clone', 'fork', 'unprotect', 'add-member', 'put-file']:
         users_csv = load_users(config.csv_users)
         users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
 
     if config.action == 'accounts':
         action_accounts(users)
+    elif config.action == 'clone':
+        action_clone(glb,
+                     users,
+                     config.project_path,
+                     config.clone_to,
+                     config.project_branch,
+                     config.deadline)
     elif config.action == 'fork':
         action_fork(glb,
                     users,

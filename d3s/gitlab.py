@@ -3,8 +3,10 @@ Helper GitLab functions.
 """
 
 import http
+import os
+import pathlib
+import subprocess
 import gitlab
-
 
 def get_canonical_project(glb, project):
     if isinstance(project, (int, str)):
@@ -64,3 +66,35 @@ def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_
             return project.commits.create(commit_data)
         else:
             raise
+
+def get_commit_before_deadline(glb, project, deadline, branch):
+    project = get_canonical_project(glb, project)
+    commits = project.commits.list(ref_name=branch, until=deadline)
+    if not commits:
+        raise Exception("No matching commit found.")
+    else:
+        return commits[0]
+
+def clone_or_fetch(glb, project, local_path):
+    if os.path.isdir(os.path.join(local_path, '.git')):
+        rc = subprocess.call(['git', 'fetch'], cwd=local_path)
+        if rc != 0:
+            raise Exception("git fetch failed")
+        return
+
+    if os.path.isdir(local_path):
+        if os.path.listdir(local_path):
+            raise Exception("There is non-empty directory that is not Git!")
+
+    pathlib.Path(local_path).mkdir(parents=True, exist_ok=True)
+
+    project = get_canonical_project(glb, project)
+    git_url = project.ssh_url_to_repo
+    rc = subprocess.call(['git', 'clone', git_url, local_path])
+    if rc != 0:
+        raise Exception("git clone failed")
+
+def reset_to_commit(local_path, commit):
+    rc = subprocess.call(['git', 'reset', '--hard', commit], cwd=local_path)
+    if rc != 0:
+        raise Exception("git reset failed")
