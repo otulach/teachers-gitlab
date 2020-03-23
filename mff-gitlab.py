@@ -26,8 +26,8 @@ def as_gitlab_users(glb, users, login_column):
         user_obj.row = user
         yield user_obj
 
-def action_accounts(glb, users):
-    for user in users:
+def action_accounts(users):
+    for _ in users:
         pass
 
 def action_fork(glb, users, from_project, to_project_template, hide_fork):
@@ -78,7 +78,12 @@ def action_add_member(glb, users, project_template, access_level):
             else:
                 print(" -> error: {}".format(exp))
 
-def action_put_file(glb, users, project_template, from_file_template, to_file_template, branch, commit_message_template):
+def action_put_file(glb, users,
+                    project_template,
+                    from_file_template,
+                    to_file_template,
+                    branch,
+                    commit_message_template):
     for user in users:
         project_path = project_template.format(**user.row)
         from_file = from_file_template.format(**user.row)
@@ -242,7 +247,7 @@ def main(argv):
         users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
 
     if config.action == 'accounts':
-        action_accounts(glb, users)
+        action_accounts(users)
     elif config.action == 'fork':
         action_fork(glb,
                     users,
