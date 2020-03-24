@@ -97,7 +97,7 @@ def action_put_file(glb, users,
         project = dg.get_canonical_project(glb, project_path)
         from_file_content = pathlib.Path(from_file).read_text()
 
-        print("Uploading {} to {} as {}".format(project.path_with_namespace, from_file, to_file))
+        print("Uploading {} to {} as {}".format(from_file, project.path_with_namespace, to_file))
         dg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
 
 def action_clone(glb, users,
