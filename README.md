@@ -1,6 +1,8 @@
-# MFF GitLab utilities
+# Teachers GitLab for mass actions on GitLab
 
-Few helper scripts to setup repositories for students.
+Utilities to help you manage multiple repositories at once.
+Targets teachers that need to manage separate repository for each
+student and massively fork, clone or upload files to them.
 
 The script expects a configuration file for Python GitLab
 format (`config.ini` in the following examples):
@@ -16,22 +18,24 @@ url = https://gitlab.mff.cuni.cz/
 private_token = your-private-token
 ```
 
-## `fork`
+Generally, the script expects that the user has a CSV file with
+list of students on which to operate.
 
-Fork repository for all users given in a CSV file.
+For the following examples, we will assume CSV `students.csv` with
+the following contents:
 
-Assuming CSV file with students in format
-
-```
+```csv
 email,login,number
 student1@mff.cuni.cz,student1,1
 student2@mff.cuni.cz,student2,2
 ```
 
-running
+## `fork`
+
+Fork repository for all users given in a CSV file.
 
 ```shell
-./mff-gitlab.py fork \
+./teachers_gitlab.py fork \
     --config-file config.ini \
     --users students.csv \
     --from teaching/course/upstream/template \
@@ -54,7 +58,7 @@ unprotects `master` branch for all repositories from the previous
 step.
 
 ```shell
-./mff-gitlab.py unprotect \
+./teachers_gitlab.py unprotect \
     --config-file config.ini \
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -68,7 +72,7 @@ Add member to a project. Typically called after `fork` (see above).
 Adding users to their repositories from the example above is done with
 
 ```shell
-./mff-gitlab.py add-member \
+./teachers_gitlab.py add-member \
     --config-file config.ini \
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \

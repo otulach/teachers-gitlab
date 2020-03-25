@@ -9,7 +9,7 @@ import os
 import pathlib
 import time
 import gitlab
-import d3s.gitlab as dg
+import matfyz.gitlab as mg
 
 def load_users(path):
     with open(path) as inp:
@@ -32,7 +32,7 @@ def action_accounts(users):
         pass
 
 def action_fork(glb, users, from_project, to_project_template, hide_fork):
-    from_project = dg.get_canonical_project(glb, from_project)
+    from_project = mg.get_canonical_project(glb, from_project)
 
     for user in users:
         to_full_path = to_project_template.format(**user.row)
@@ -42,16 +42,16 @@ def action_fork(glb, users, from_project, to_project_template, hide_fork):
         print("Forking {} to {}/{} for user {}".format(from_project.path_with_namespace,
                                                        to_namespace, to_name,
                                                        user.username))
-        to_project = dg.fork_project_idempotent(glb, from_project, to_namespace, to_name)
+        to_project = mg.fork_project_idempotent(glb, from_project, to_namespace, to_name)
 
         if hide_fork:
-            dg.remove_fork_relationship(glb, to_project)
+            mg.remove_fork_relationship(glb, to_project)
 
 
 def action_unprotect_branch(glb, users, project_template, branch_name):
     for user in users:
         project_path = project_template.format(**user.row)
-        project = dg.get_canonical_project(glb, project_path)
+        project = mg.get_canonical_project(glb, project_path)
 
         branch = project.branches.get(branch_name)
         print("Unprotecting branch {} on {}".format(branch.name, project.path_with_namespace))
@@ -65,7 +65,7 @@ def action_add_member(glb, users, project_template, access_level):
 
     for user in users:
         project_path = project_template.format(**user.row)
-        project = dg.get_canonical_project(glb, project_path)
+        project = mg.get_canonical_project(glb, project_path)
 
         try:
             print("Adding {} to {}".format(user.username, project.path_with_namespace))
@@ -94,11 +94,11 @@ def action_put_file(glb, users,
         }
         commit_message = commit_message_template.format(GL=extras, **user.row)
 
-        project = dg.get_canonical_project(glb, project_path)
+        project = mg.get_canonical_project(glb, project_path)
         from_file_content = pathlib.Path(from_file).read_text()
 
         print("Uploading {} to {} as {}".format(from_file, project.path_with_namespace, to_file))
-        dg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
+        mg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
 
 def action_clone(glb, users,
                  project_template,
@@ -109,9 +109,9 @@ def action_clone(glb, users,
         project = project_template.format(**user.row)
         local_path = local_path_template.format(**user.row)
 
-        last_commit = dg.get_commit_before_deadline(glb, project, deadline, branch)
-        dg.clone_or_fetch(glb, project, local_path)
-        dg.reset_to_commit(local_path, last_commit.id)
+        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
+        mg.clone_or_fetch(glb, project, local_path)
+        mg.reset_to_commit(local_path, last_commit.id)
 
 def main(argv):
     locale.setlocale(locale.LC_ALL, '')
@@ -144,7 +144,7 @@ def main(argv):
                             metavar='COLUMN_NAME',
                             help='Column name with login information')
 
-    args = argparse.ArgumentParser(description='MFF GitLab Wrapper')
+    args = argparse.ArgumentParser(description='Teachers GitLab for mass actions on GitLab')
     args.set_defaults(action='help')
     args_sub = args.add_subparsers(help='Select what to do')
 
