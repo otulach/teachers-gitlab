@@ -78,3 +78,17 @@ Adding users to their repositories from the example above is done with
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
     --access-level devel
 ```
+
+## `clone`
+
+Clone project to local disk. It is possible to specify a deadline to
+checkout to a specific commit (last before given deadline).
+
+```shell
+./teachers_gitlab.py clone \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
+    --to "solutions/01-{number}-{login}" \
+    --deadline '2020-01-01T00:00:00Z'
+```
