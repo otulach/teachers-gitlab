@@ -113,6 +113,27 @@ def action_clone(glb, users,
         mg.clone_or_fetch(glb, project, local_path)
         mg.reset_to_commit(local_path, last_commit.id)
 
+def action_deadline_commits(glb, users,
+                            project_template,
+                            branch,
+                            deadline,
+                            output_header,
+                            output_template,
+                            output_filename):
+    if output_filename:
+        output = open(output_filename, 'w')
+    else:
+        output = sys.stdout
+
+    print(output_header, file=output)
+    for user in users:
+        project = project_template.format(**user.row)
+        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
+        line = output_template.format(commit=last_commit, **user.row)
+        print(line, file=output)
+    if output_filename:
+        output.close()
+
 def main(argv):
     locale.setlocale(locale.LC_ALL, '')
 
@@ -268,6 +289,44 @@ def main(argv):
                             help='Submission deadline, ' \
                                 'take last commit before deadline (defaults to now).')
 
+    args_deadline_commit = args_sub.add_parser('deadline-commit',
+                                     help='Get last commits before deadline.',
+                                     parents=[args_common, args_users])
+    args_deadline_commit.set_defaults(action='deadline-commit')
+    args_deadline_commit.add_argument('--project',
+                                      required=True,
+                                      dest='project_path',
+                                      metavar='PROJECT_PATH_WITH_FORMAT',
+                                      help='Project path, including ' \
+                                          'formatting characters from CSV columns.')
+    args_deadline_commit.add_argument('--branch',
+                                      default='master',
+                                      dest='project_branch',
+                                      metavar='BRANCH',
+                                      help='Branch to use.')
+    args_deadline_commit.add_argument('--deadline',
+                                      default=time.strftime('%Y-%m-%dT%H:%M:S%z'),
+                                      dest='deadline',
+                                      metavar='YYYY-MM-DDTHH:MM:SSZ',
+                                      help='Submission deadline, ' \
+                                         'take last commit before deadline (defaults to now).')
+    args_deadline_commit.add_argument('--first-line',
+                                      default='login,commit',
+                                      dest='output_header',
+                                      metavar='OUTPUT_HEADER',
+                                      help='First line for the output.')
+    args_deadline_commit.add_argument('--format',
+                                      default='{login},{commit.id}',
+                                      dest='output_format',
+                                      metavar='OUTPUT_ROW_WITH_FORMAT',
+                                      help='Formatting for the output row, ' \
+                                          'defaults to {login},{commit.id}.')
+    args_deadline_commit.add_argument('--output',
+                                      default=None,
+                                      dest='output_filename',
+                                      metavar='OUTPUT_FILENAME',
+                                      help='Output file, defaults to stdout.')
+
     if len(argv) < 1:
         # pylint: disable=too-few-public-methods
         class HelpConfig:
@@ -284,7 +343,7 @@ def main(argv):
     glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
 
     # These actions require that we prepare list of users
-    if config.action in ['accounts', 'clone', 'fork', 'unprotect', 'add-member', 'put-file']:
+    if config.action in ['accounts', 'clone', 'deadline-commit', 'fork', 'unprotect', 'add-member', 'put-file']:
         users_csv = load_users(config.csv_users)
         users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
 
@@ -297,6 +356,15 @@ def main(argv):
                      config.clone_to,
                      config.project_branch,
                      config.deadline)
+    elif config.action == 'deadline-commit':
+        action_deadline_commits(glb,
+                                users,
+                                config.project_path,
+                                config.project_branch,
+                                config.deadline,
+                                config.output_header,
+                                config.output_format,
+                                config.output_filename)
     elif config.action == 'fork':
         action_fork(glb,
                     users,

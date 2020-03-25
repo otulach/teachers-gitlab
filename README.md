@@ -92,3 +92,20 @@ checkout to a specific commit (last before given deadline).
     --to "solutions/01-{number}-{login}" \
     --deadline '2020-01-01T00:00:00Z'
 ```
+
+## `deadline-commit`
+
+Get last commits before a given deadline.
+
+By default, it generates a CSV with logins and commit ids.
+
+```shell
+./teachers_gitlab.py deadline-commit \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
+    --deadline '2020-01-01T00:00:00Z' \
+    --output commits_01.csv \
+    --first-line 'login,number,commit' \
+    --format '{login},{number},{commit.id}'
+```
