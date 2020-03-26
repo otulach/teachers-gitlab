@@ -4,6 +4,22 @@ Utilities to help you manage multiple repositories at once.
 Targets teachers that need to manage separate repository for each
 student and massively fork, clone or upload files to them.
 
+## Installation
+
+It is possible to install the script via:
+
+```shell
+pip install -r requirements.txt
+./setup.py build
+./setup.py install
+```
+
+This will give you `teachers_gitlab` on your `$PATH`. You can also
+use `virtualenv` to test locally or use the provided shell script
+wrapper (as used in the examples).
+
+## Configuration
+
 The script expects a configuration file for Python GitLab
 format (`config.ini` in the following examples):
 
