@@ -12,7 +12,7 @@ import os
 import pathlib
 import time
 import gitlab
-import matfyz.gitlab as mg
+import matfyz.gitlab.utils as mg
 
 def load_users(path):
     with open(path) as inp:
@@ -137,7 +137,7 @@ def action_deadline_commits(glb, users,
     if output_filename:
         output.close()
 
-def main(argv):
+def main():
     locale.setlocale(locale.LC_ALL, '')
 
     args_common = argparse.ArgumentParser(add_help=False)
@@ -330,14 +330,14 @@ def main(argv):
                                       metavar='OUTPUT_FILENAME',
                                       help='Output file, defaults to stdout.')
 
-    if len(argv) < 1:
+    if len(sys.argv) < 2:
         # pylint: disable=too-few-public-methods
         class HelpConfig:
             def __init__(self):
                 self.action = 'help'
         config = HelpConfig()
     else:
-        config = args.parse_args(argv)
+        config = args.parse_args()
 
     if config.action == 'help':
         args.print_help()
@@ -396,4 +396,4 @@ def main(argv):
         raise Exception("Unknown action.")
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()

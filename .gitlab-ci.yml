@@ -7,4 +7,4 @@ default:
 
 print-help:
   script:
-    - ./teachers_gitlab.py help
+    - ./teachers_gitlab.sh help

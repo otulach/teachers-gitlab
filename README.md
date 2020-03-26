@@ -35,7 +35,7 @@ student2@mff.cuni.cz,student2,2
 Fork repository for all users given in a CSV file.
 
 ```shell
-./teachers_gitlab.py fork \
+./teachers_gitlab.sh fork \
     --config-file config.ini \
     --users students.csv \
     --from teaching/course/upstream/template \
@@ -58,7 +58,7 @@ unprotects `master` branch for all repositories from the previous
 step.
 
 ```shell
-./teachers_gitlab.py unprotect \
+./teachers_gitlab.sh unprotect \
     --config-file config.ini \
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -72,7 +72,7 @@ Add member to a project. Typically called after `fork` (see above).
 Adding users to their repositories from the example above is done with
 
 ```shell
-./teachers_gitlab.py add-member \
+./teachers_gitlab.sh add-member \
     --config-file config.ini \
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -85,7 +85,7 @@ Clone project to local disk. It is possible to specify a deadline to
 checkout to a specific commit (last before given deadline).
 
 ```shell
-./teachers_gitlab.py clone \
+./teachers_gitlab.sh clone \
     --config-file config.ini \
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -100,7 +100,7 @@ Get last commits before a given deadline.
 By default, it generates a CSV with logins and commit ids.
 
 ```shell
-./teachers_gitlab.py deadline-commit \
+./teachers_gitlab.sh deadline-commit \
     --config-file config.ini \
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
