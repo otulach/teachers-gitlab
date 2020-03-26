@@ -9,7 +9,7 @@ print-help:
   script:
     - ./teachers_gitlab.sh help
 
-install-print-help
+install-print-help:
   script:
     - ./setup.py build
     - ./setup.py install
