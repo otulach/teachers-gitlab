@@ -87,7 +87,8 @@ def action_put_file(glb, users,
                     from_file_template,
                     to_file_template,
                     branch,
-                    commit_message_template):
+                    commit_message_template,
+                    force_commit):
     for user in users:
         project_path = project_template.format(**user.row)
         from_file = from_file_template.format(**user.row)
@@ -100,8 +101,19 @@ def action_put_file(glb, users,
         project = mg.get_canonical_project(glb, project_path)
         from_file_content = pathlib.Path(from_file).read_text()
 
-        print("Uploading {} to {} as {}".format(from_file, project.path_with_namespace, to_file))
-        mg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
+        commit_needed = force_commit
+        if not force_commit:
+            current_content = mg.get_file_contents(glb, project, branch, to_file)
+            if current_content:
+                commit_needed = current_content != from_file_content.encode('utf-8')
+            else:
+                commit_needed = True
+
+        if commit_needed:
+            print("Uploading {} to {} as {}".format(from_file, project.path_with_namespace, to_file))
+            mg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
+        else:
+            print("Not uploading {} to {} as there is no change.".format(from_file, project.path_with_namespace))
 
 def action_clone(glb, users,
                  project_template,
@@ -263,6 +275,11 @@ def main():
                                dest='commit_message',
                                metavar='COMMIT_MESSAGE_WITH_FORMAT',
                                help='Commit message, including formatting.')
+    args_put_file.add_argument('--force-commit',
+                               default=False,
+                               dest='force_commit',
+                               action='store_true',
+                               help='Do not check current file content, always upload.')
 
     args_clone = args_sub.add_parser('clone',
                                      help='Clone multiple repos.',
@@ -391,7 +408,8 @@ def main():
                         config.file_from,
                         config.file_to,
                         config.project_branch,
-                        config.commit_message)
+                        config.commit_message,
+                        config.force_commit)
     else:
         raise Exception("Unknown action.")
 

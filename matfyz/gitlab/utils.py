@@ -6,6 +6,7 @@
 Helper GitLab functions.
 """
 
+import base64
 import http
 import os
 import pathlib
@@ -70,6 +71,17 @@ def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_
             return project.commits.create(commit_data)
         else:
             raise
+
+def get_file_contents(glb, project, branch, file_path):
+    project = get_canonical_project(glb, project)
+    base_filename = os.path.basename(file_path)
+    files = project.repository_tree(path=os.path.dirname(file_path), ref=branch)
+    current_file = [f for f in files if f['name'] == base_filename]
+    if not current_file:
+        return None
+    file_info = project.repository_blob(current_file[0]['id'])
+    content = base64.b64decode(file_info['content'])
+    return content
 
 def get_commit_before_deadline(glb, project, deadline, branch):
     project = get_canonical_project(glb, project)
