@@ -325,7 +325,7 @@ def main():
                                       metavar='BRANCH',
                                       help='Branch to use.')
     args_deadline_commit.add_argument('--deadline',
-                                      default=time.strftime('%Y-%m-%dT%H:%M:S%z'),
+                                      default=time.strftime('%Y-%m-%dT%H:%M:%S%z'),
                                       dest='deadline',
                                       metavar='YYYY-MM-DDTHH:MM:SSZ',
                                       help='Submission deadline, ' \
