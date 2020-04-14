@@ -362,8 +362,7 @@ def main():
 
     glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
 
-    # These actions require that we prepare list of users
-    if config.action in ['accounts', 'clone', 'deadline-commit', 'fork', 'unprotect', 'add-member', 'put-file']:
+    if hasattr(config, 'csv_users'):
         users_csv = load_users(config.csv_users)
         users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
 
