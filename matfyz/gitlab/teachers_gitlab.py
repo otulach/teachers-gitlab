@@ -119,12 +119,16 @@ def action_clone(glb, users,
                  project_template,
                  local_path_template,
                  branch,
+                 commit,
                  deadline):
     for user in users:
-        project = project_template.format(**user.row)
+        project = mg.get_canonical_project(glb, project_template.format(**user.row))
         local_path = local_path_template.format(**user.row)
 
-        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
+        if commit:
+            last_commit = project.commits.get(commit.format(**user.row))
+        else:
+            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
         mg.clone_or_fetch(glb, project, local_path)
         mg.reset_to_commit(local_path, last_commit.id)
 
@@ -302,12 +306,18 @@ def main():
                             dest='project_branch',
                             metavar='BRANCH',
                             help='Branch to checkout.')
-    args_clone.add_argument('--deadline',
-                            default=time.strftime('%Y-%m-%dT%H:%M:S%z'),
-                            dest='deadline',
-                            metavar='YYYY-MM-DDTHH:MM:SSZ',
-                            help='Submission deadline, ' \
-                                'take last commit before deadline (defaults to now).')
+    args_clone_commit_spec = args_clone.add_mutually_exclusive_group()
+    args_clone_commit_spec.add_argument('--deadline',
+                                        default=time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                                        dest='deadline',
+                                        metavar='YYYY-MM-DDTHH:MM:SSZ',
+                                        help='Submission deadline, ' \
+                                            'take last commit before deadline (defaults to now).')
+    args_clone_commit_spec.add_argument('--commit',
+                                        default=None,
+                                        dest='clone_commit',
+                                        metavar='COMMIT_WITH_FORMAT',
+                                        help='Commit to reset to after clone.')
 
     args_deadline_commit = args_sub.add_parser('deadline-commit',
                                      help='Get last commits before deadline.',
@@ -374,6 +384,7 @@ def main():
                      config.project_path,
                      config.clone_to,
                      config.project_branch,
+                     config.clone_commit,
                      config.deadline)
     elif config.action == 'deadline-commit':
         action_deadline_commits(glb,
