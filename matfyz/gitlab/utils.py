@@ -99,7 +99,7 @@ def clone_or_fetch(glb, project, local_path):
         return
 
     if os.path.isdir(local_path):
-        if os.path.listdir(local_path):
+        if os.listdir(local_path):
             raise Exception("There is non-empty directory that is not Git!")
 
     pathlib.Path(local_path).mkdir(parents=True, exist_ok=True)
