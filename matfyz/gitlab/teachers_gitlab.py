@@ -98,7 +98,11 @@ def action_put_file(glb, users,
         }
         commit_message = commit_message_template.format(GL=extras, **user.row)
 
-        project = mg.get_canonical_project(glb, project_path)
+        try:
+            project = mg.get_canonical_project(glb, project_path)
+        except gitlab.exceptions.GitlabGetError:
+            print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
+            continue
         from_file_content = pathlib.Path(from_file).read_text()
 
         commit_needed = force_commit
@@ -147,9 +151,12 @@ def action_deadline_commits(glb, users,
     print(output_header, file=output)
     for user in users:
         project = project_template.format(**user.row)
-        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
-        line = output_template.format(commit=last_commit, **user.row)
-        print(line, file=output)
+        try:
+            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
+            line = output_template.format(commit=last_commit, **user.row)
+            print(line, file=output)
+        except gitlab.exceptions.GitlabGetError:
+            print("WARNING: project {} not found!".format(project), file=sys.stderr)
     if output_filename:
         output.close()
 
