@@ -38,7 +38,9 @@ Generally, the script expects that the user has a CSV file with
 list of students on which to operate.
 
 For the following examples, we will assume CSV `students.csv` with
-the following contents:
+the following contents (similar CSV can be generated from SIS,
+use the "Studenti předběžně zapsaní na předmět" query in
+"Studijní sestavy"):
 
 ```csv
 email,login,number
