@@ -315,7 +315,7 @@ def main():
                             help='Branch to checkout.')
     args_clone_commit_spec = args_clone.add_mutually_exclusive_group()
     args_clone_commit_spec.add_argument('--deadline',
-                                        default=time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                                        default='now',
                                         dest='deadline',
                                         metavar='YYYY-MM-DDTHH:MM:SSZ',
                                         help='Submission deadline, ' \
@@ -342,7 +342,7 @@ def main():
                                       metavar='BRANCH',
                                       help='Branch to use.')
     args_deadline_commit.add_argument('--deadline',
-                                      default=time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                                      default='now',
                                       dest='deadline',
                                       metavar='YYYY-MM-DDTHH:MM:SSZ',
                                       help='Submission deadline, ' \
@@ -386,6 +386,8 @@ def main():
     if config.action == 'accounts':
         action_accounts(users)
     elif config.action == 'clone':
+        if config.deadline == 'now':
+            config.deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
         action_clone(glb,
                      users,
                      config.project_path,
@@ -394,6 +396,8 @@ def main():
                      config.clone_commit,
                      config.deadline)
     elif config.action == 'deadline-commit':
+        if config.deadline == 'now':
+            config.deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
         action_deadline_commits(glb,
                                 users,
                                 config.project_path,
