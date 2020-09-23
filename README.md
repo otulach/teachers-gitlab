@@ -83,6 +83,24 @@ step.
     --branch master
 ```
 
+## `protect`
+
+Set branch protection.
+
+Assuming the same input files as in `fork`, following command
+protects `master` branch for all repositories from the previous
+step but allows developers to push and merge
+
+```shell
+./teachers_gitlab.sh unprotect \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
+    --branch master \
+    --developers-can-merge \
+    --developers-can-push
+```
+
 ## `add-member`
 
 Add member to a project. Typically called after `fork` (see above).

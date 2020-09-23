@@ -50,6 +50,19 @@ def action_fork(glb, users, from_project, to_project_template, hide_fork):
         if hide_fork:
             mg.remove_fork_relationship(glb, to_project)
 
+def action_set_branch_protection(glb, users,
+                                 project_template,
+                                 branch_name,
+                                 developers_can_merge,
+                                 developers_can_push):
+    for user in users:
+        project_path = project_template.format(**user.row)
+        project = mg.get_canonical_project(glb, project_path)
+
+        branch = project.branches.get(branch_name)
+        print("Setting protection on branch {} in {}".format(branch.name, project.path_with_namespace))
+        branch.protect(developers_can_push=developers_can_push, developers_can_merge=developers_can_merge)
+
 
 def action_unprotect_branch(glb, users, project_template, branch_name):
     for user in users:
@@ -240,6 +253,32 @@ def main():
                                 metavar='GIT_BRANCH',
                                 help='Git branch name to unprotect')
 
+    args_protect = args_sub.add_parser('protect',
+                                       help='Set branch protection on multiple projects.',
+                                       parents=[args_common, args_users])
+    args_protect.set_defaults(action='protect')
+    args_protect.add_argument('--project',
+                              required=True,
+                              dest='project_path',
+                              metavar='PROJECT_PATH_WITH_FORMAT',
+                              help='Project path, including ' \
+                                   'formatting characters from CSV columns.')
+    args_protect.add_argument('--branch',
+                              required=True,
+                              dest='project_branch',
+                              metavar='GIT_BRANCH',
+                              help='Git branch name to unprotect')
+    args_protect.add_argument('--developers-can-merge',
+                              default=False,
+                              dest='developers_can_merge',
+                              action='store_true',
+                              help='Allow developers to merge into this branch.')
+    args_protect.add_argument('--developers-can-push',
+                              default=False,
+                              dest='developers_can_push',
+                              action='store_true',
+                              help='Allow developers to merge into this branch.')
+
     args_add_member = args_sub.add_parser('add-member',
                                           help='Add member on multiple projects.',
                                           parents=[args_common, args_users])
@@ -417,6 +456,13 @@ def main():
                                 users,
                                 config.project_path,
                                 config.project_branch)
+    elif config.action == 'protect':
+        action_set_branch_protection(glb,
+                                     users,
+                                     config.project_path,
+                                     config.project_branch,
+                                     config.developers_can_merge,
+                                     config.developers_can_push)
     elif config.action == 'add-member':
         action_add_member(glb,
                           users,
