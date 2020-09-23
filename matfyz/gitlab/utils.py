@@ -11,6 +11,7 @@ import http
 import os
 import pathlib
 import subprocess
+import time
 import gitlab
 
 def get_canonical_project(glb, project):
@@ -19,6 +20,38 @@ def get_canonical_project(glb, project):
     if isinstance(project, gitlab.v4.objects.Project):
         return project
     raise Exception("Unexpected object type.")
+
+def retries(n=None, interval=2, timeout=None, message="Operation timed-out (too many retries)"):
+    """
+    To be used in for-loops to try action multiple times.
+    Throws exception on time-out.
+    """
+
+    if (n is None) and (timeout is None):
+        raise Exception("Specify either n or timeout for retries")
+
+    if timeout is None:
+        timeout = n * interval
+    remaining = timeout
+    n = 0
+    while remaining > 0:
+        remaining = remaining - interval
+        n = n + 1
+        yield n
+        time.sleep(interval)
+    raise Exception(message)
+
+
+def wait_for_project_to_be_forked(glb, project_path, timeout=None):
+    project = get_canonical_project(glb, project_path)
+
+    # In 10 minutes, even Torvalds' Linux repository is forked
+    # on a not-that-fast instance :-) 
+    for i in retries(120, 5, timeout):
+        if not project.empty_repo:
+            return
+        # Force refresh (why project.refresh() does not work?)
+        project = get_canonical_project(glb, project.path_with_namespace)
 
 
 def fork_project_idempotent(glb, parent, fork_namespace, fork_name):

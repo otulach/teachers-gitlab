@@ -46,6 +46,7 @@ def action_fork(glb, users, from_project, to_project_template, hide_fork):
                                                        to_namespace, to_name,
                                                        user.username))
         to_project = mg.fork_project_idempotent(glb, from_project, to_namespace, to_name)
+        mg.wait_for_project_to_be_forked(glb, to_project)
 
         if hide_fork:
             mg.remove_fork_relationship(glb, to_project)
