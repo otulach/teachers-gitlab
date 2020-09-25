@@ -77,6 +77,8 @@ def action_unprotect_branch(glb, users, project_template, branch_name):
 def action_add_member(glb, users, project_template, access_level):
     if access_level == 'devel':
         level = gitlab.DEVELOPER_ACCESS
+    elif access_level == 'reporter':
+        level = gitlab.REPORTER_ACCESS
     else:
         raise Exception("Unsupported access level.")
 
@@ -85,7 +87,7 @@ def action_add_member(glb, users, project_template, access_level):
         project = mg.get_canonical_project(glb, project_path)
 
         try:
-            print("Adding {} to {}".format(user.username, project.path_with_namespace))
+            print("Adding {} to {} (level {})".format(user.username, project.path_with_namespace, level))
             project.members.create({
                 'user_id' : user.id,
                 'access_level' : level,
@@ -294,7 +296,7 @@ def main():
                                  required=True,
                                  dest='access_level',
                                  metavar='LEVEL',
-                                 help='Currently only "devel" is recognized.')
+                                 help='Access level: devel or reporter.')
 
     args_put_file = args_sub.add_parser('put-file',
                                         help='Upload file to multiple repos.',
