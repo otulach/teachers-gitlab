@@ -98,6 +98,34 @@ def action_add_member(glb, users, project_template, access_level):
             else:
                 print(" -> error: {}".format(exp))
 
+def action_get_file(glb,
+                    users,
+                    project_template,
+                    remote_file_template,
+                    local_file_template,
+                    branch,
+                    deadline):
+    for user in users:
+        project_path = project_template.format(**user.row)
+        remote_file = remote_file_template.format(**user.row)
+        local_file = local_file_template.format(**user.row)
+
+        try:
+            project = mg.get_canonical_project(glb, project_path)
+        except gitlab.exceptions.GitlabGetError:
+            print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
+            continue
+
+        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
+        current_content = mg.get_file_contents(glb, project, last_commit.id, remote_file)
+        if current_content is None:
+            print("File {} does not exist in {}.".format(remote_file, project.path_with_namespace))
+        else:
+            print("File {} in {} has {}B.".format(remote_file, project.path_with_namespace, len(current_content)))
+            with open(local_file, "wb") as f:
+                f.write(current_content)
+
+
 def action_put_file(glb, users,
                     project_template,
                     from_file_template,
@@ -298,6 +326,38 @@ def main():
                                  metavar='LEVEL',
                                  help='Access level: devel or reporter.')
 
+    args_get_file = args_sub.add_parser('get-file',
+                                        help='Get file from multiple repos.',
+                                        parents=[args_common, args_users])
+    args_get_file.set_defaults(action='get-file')
+    args_get_file.add_argument('--project',
+                               required=True,
+                               dest='project_path',
+                               metavar='PROJECT_PATH_WITH_FORMAT',
+                               help='Project path, including ' \
+                                    'formatting characters from CSV columns.')
+    args_get_file.add_argument('--remote-file',
+                               required=True,
+                               dest='file_remote',
+                               metavar='REMOTE_FILE_PATH_WITH_FORMAT',
+                               help='Remote file path, including formatting.')
+    args_get_file.add_argument('--local-file',
+                               required=True,
+                               dest='file_local',
+                               metavar='LOCAL_FILE_PATH_WITH_FORMAT',
+                               help='Local file path, including formatting.')
+    args_get_file.add_argument('--branch',
+                               default='master',
+                               dest='project_branch',
+                               metavar='BRANCH',
+                               help='Branch to commit to, defaults to master.')
+    args_get_file.add_argument('--deadline',
+                               default='now',
+                               dest='deadline',
+                               metavar='YYYY-MM-DDTHH:MM:SSZ',
+                               help='Submission deadline, ' \
+                                   'take last commit before deadline (defaults to now).')
+
     args_put_file = args_sub.add_parser('put-file',
                                         help='Upload file to multiple repos.',
                                         parents=[args_common, args_users])
@@ -471,6 +531,16 @@ def main():
                           users,
                           config.project_path,
                           config.access_level)
+    elif config.action == 'get-file':
+        if config.deadline == 'now':
+            config.deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+        action_get_file(glb,
+                        users,
+                        config.project_path,
+                        config.file_remote,
+                        config.file_local,
+                        config.project_branch,
+                        config.deadline)
     elif config.action == 'put-file':
         action_put_file(glb,
                         users,

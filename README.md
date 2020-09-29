@@ -145,3 +145,17 @@ By default, it generates a CSV with logins and commit ids.
     --first-line 'login,number,commit' \
     --format '{login},{number},{commit.id}'
 ```
+
+## `get-file`
+
+Get specific file before a given deadline.
+
+```shell
+./teachers_gitlab.sh get-file \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
+    --deadline '2020-01-01T00:00:00Z' \
+    --remote-file "quiz-01.json" \
+    --local-file "quiz-01-{login}.json"
+```
