@@ -20,10 +20,13 @@ class ActionParameter:
         self.name = name
         self.extra_args = kwargs
 
-def register_command(name, help, callback_func, command_parser, parser_common, parser_users):
+def register_command(name, callback_func, command_parser, parser_common, parser_users):
+    short_help = callback_func.__doc__
+    if short_help is not None:
+        short_help = short_help.strip().split("\n")[0]
     parser = command_parser.add_parser(
         name,
-        help=help,
+        help=short_help,
         parents=[parser_common, parser_users]
     )
     for dest, param in callback_func.__annotations__.items():
@@ -88,6 +91,10 @@ def action_fork(
             help='Hide fork relationship.'
         )
     ):
+    """
+    Fork one repo multiple times.
+    """
+
     from_project = mg.get_canonical_project(glb, from_project)
 
     for user in users:
@@ -133,6 +140,10 @@ def action_set_branch_protection(
             help='Allow developers to merge into this branch.'
         )
     ):
+    """
+    Set branch protection on multiple projects.
+    """
+
     for user in users:
         project_path = project_template.format(**user.row)
         project = mg.get_canonical_project(glb, project_path)
@@ -158,6 +169,10 @@ def action_unprotect_branch(
             help='Git branch name to unprotect.'
         )
     ):
+    """
+    Unprotect branch on multiple projects.
+    """
+
     for user in users:
         project_path = project_template.format(**user.row)
         project = mg.get_canonical_project(glb, project_path)
@@ -183,6 +198,10 @@ def action_add_member(
             help='Access level: devel or reporter.'
         )
     ):
+    """
+    Add members to multiple projects.
+    """
+
     if access_level == 'devel':
         level = gitlab.DEVELOPER_ACCESS
     elif access_level == 'reporter':
@@ -241,6 +260,9 @@ def action_get_file(
             help='Project path, including formatting characters from CSV columns.'
         )
     ):
+    """
+    Get file from multiple repositories.
+    """
 
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
@@ -305,6 +327,10 @@ def action_put_file(
             help='Do not check current file content, always upload.'
         )
     ):
+    """
+    Upload file to multiple repositories.
+    """
+
     for user in users:
         project_path = project_template.format(**user.row)
         from_file = from_file_template.format(**user.row)
@@ -369,6 +395,10 @@ def action_clone(
             help='Submission deadline, take last commit before deadline (defaults to now).'
         )
     ):
+    """
+    Clone multiple repositories.
+    """
+
     # FIXME: commit and deadline are mutually exclusive
 
     if deadline == 'now':
@@ -426,6 +456,10 @@ def action_deadline_commits(
             help='Output file, defaults to stdout.'
         )
     ):
+    """
+    Get last commits before deadline.
+    """
+
     if output_filename:
         output = open(output_filename, 'w')
     else:
@@ -493,7 +527,6 @@ def main():
 
     register_command(
         'get-file',
-        'Get file from multiple repos.',
         action_get_file,
         args_sub,
         args_common,
@@ -501,7 +534,6 @@ def main():
     )
     register_command(
         'fork',
-        'Fork one repo multiple times.',
         action_fork,
         args_sub,
         args_common,
@@ -509,7 +541,6 @@ def main():
     )
     register_command(
         'unprotect',
-        'Unprotect branch on multiple projects.',
         action_unprotect_branch,
         args_sub,
         args_common,
@@ -517,7 +548,6 @@ def main():
     )
     register_command(
         'protect',
-        'Set branch protection on multiple projects.',
         action_set_branch_protection,
         args_sub,
         args_common,
@@ -525,7 +555,6 @@ def main():
     )
     register_command(
         'add-member',
-        'Add member on multiple projects.',
         action_add_member,
         args_sub,
         args_common,
@@ -533,7 +562,6 @@ def main():
     )
     register_command(
         'put-file',
-        'Upload file to multiple repos.',
         action_put_file,
         args_sub,
         args_common,
@@ -541,7 +569,6 @@ def main():
     )
     register_command(
         'clone',
-        'Clone multiple repos.',
         action_clone,
         args_sub,
         args_common,
@@ -549,7 +576,6 @@ def main():
     )
     register_command(
         'deadline-commit',
-        'Get last commits before deadline.',
         action_deadline_commits,
         args_sub,
         args_common,
