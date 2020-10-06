@@ -14,10 +14,143 @@ import time
 import gitlab
 import matfyz.gitlab.utils as mg
 
-def load_users(path):
-    with open(path) as inp:
-        data = csv.DictReader(inp)
-        return list(data)
+class Parameter:
+    """
+    Base class for parameter annotation.
+    """
+    def __init__(self):
+        pass
+
+    def register(self, argument_name, subparser):
+        pass
+
+    def get_value(self, argument_name, glb, parsed_options):
+        pass
+
+class UserListParameter(Parameter):
+    """
+    Parameter annotation to mark list of users.
+    """
+    def __init__(self):
+        Parameter.__init__(self)
+
+    def register(self, argument_name, subparser):
+        subparser.add_argument(
+            '--users',
+            required=True,
+            dest='csv_users',
+            metavar='LIST.csv',
+            help='CSV with users.'
+        )
+        subparser.add_argument(
+            '--login-column',
+            dest='csv_users_login_column',
+            default='login',
+            metavar='COLUMN_NAME',
+            help='Column name with login information'
+        )
+
+    def get_value(self, argument_name, glb, parsed_options):
+        users = []
+        with open(parsed_options.csv_users) as inp:
+            data = csv.DictReader(inp)
+            users = list(data)
+            return as_gitlab_users(glb, users, parsed_options.csv_users_login_column)
+
+class ActionParameter(Parameter):
+    """
+    Parameter annotation to create corresponding CLI option.
+    """
+    def __init__(self, name, **kwargs):
+        Parameter.__init__(self)
+        self.name = name
+        self.extra_args = kwargs
+
+    def register(self, argument_name, subparser):
+        subparser.add_argument(
+            '--' + self.name,
+            dest='arg_' + argument_name,
+            **self.extra_args
+        )
+
+    def get_value(self, argument_name, glb, parsed_options):
+        return getattr(parsed_options, 'arg_' + argument_name)
+
+class CommandParser:
+    def __init__(self):
+        self.args_common = argparse.ArgumentParser(add_help=False)
+        self.args_common.add_argument(
+            '--debug',
+            default=False,
+            dest='debug',
+            action='store_true',
+            help='Print debugging messages.'
+        )
+        self.args_common.add_argument(
+            '--config-file',
+            default=None,
+            action='append',
+            dest='gitlab_config_file',
+            help='GitLab configuration file.'
+        )
+        self.args_common.add_argument(
+            '--instance',
+            default=None,
+            dest='gitlab_instance',
+            help='Which GitLab instance to choose.'
+        )
+
+        self.args = argparse.ArgumentParser(
+            description='Teachers GitLab for mass actions on GitLab'
+        )
+
+        self.args.set_defaults(action='help')
+        self.args_sub = self.args.add_subparsers(help='Select what to do')
+
+        args_help = self.args_sub.add_parser('help', help='Show this help.')
+        args_help.set_defaults(action='help')
+
+        self.parsed_options = None
+
+    def add_command(self, name, callback_func):
+        short_help = callback_func.__doc__
+        if short_help is not None:
+            short_help = short_help.strip().split("\n")[0]
+        parser = self.args_sub.add_parser(
+            name,
+            help=short_help,
+            parents=[self.args_common]
+        )
+        for dest, param in callback_func.__annotations__.items():
+            param.register(dest, parser)
+
+        def callback_wrapper(glb, cfg, callback):
+            kwargs = {}
+            for dest, param in callback.__annotations__.items():
+                kwargs[dest] = param.get_value(dest, glb, cfg)
+            callback(glb, **kwargs)
+
+        parser.set_defaults(func=lambda glb, cfg: callback_wrapper(glb, cfg, callback_func))
+
+    def parse_args(self, argv):
+        if len(argv) < 2:
+            # pylint: disable=too-few-public-methods
+            class HelpConfig:
+                def __init__(self):
+                    self.func = None
+            self.parsed_options = HelpConfig()
+        else:
+            self.parsed_options = self.args.parse_args(argv)
+        return self.parsed_options
+
+    def print_help(self):
+        self.args.print_help()
+
+    def get_gitlab_instance(self):
+        return gitlab.Gitlab.from_config(
+            self.parsed_options.gitlab_instance,
+            self.parsed_options.gitlab_config_file
+        )
 
 def as_gitlab_users(glb, users, login_column):
     for user in users:
@@ -30,11 +163,41 @@ def as_gitlab_users(glb, users, login_column):
         user_obj.row = user
         yield user_obj
 
-def action_accounts(users):
+
+def action_accounts(glb, users: UserListParameter()):
+    """
+    List accounts that were not found.
+    """
     for _ in users:
         pass
 
-def action_fork(glb, users, from_project, to_project_template, hide_fork):
+
+def action_fork(
+        glb,
+        users: UserListParameter(),
+        from_project: ActionParameter(
+            'from',
+            required=True,
+            metavar='REPO_PATH',
+            help='Parent repository path.'
+        ),
+        to_project_template: ActionParameter(
+            'to',
+            required=True,
+            metavar='REPO_PATH_WITH_FORMAT',
+            help='Target repository path, including formatting characters from CSV columns.'
+        ),
+        hide_fork: ActionParameter(
+            'hide-fork',
+            default=False,
+            action='store_true',
+            help='Hide fork relationship.'
+        )
+    ):
+    """
+    Fork one repo multiple times.
+    """
+
     from_project = mg.get_canonical_project(glb, from_project)
 
     for user in users:
@@ -51,11 +214,39 @@ def action_fork(glb, users, from_project, to_project_template, hide_fork):
         if hide_fork:
             mg.remove_fork_relationship(glb, to_project)
 
-def action_set_branch_protection(glb, users,
-                                 project_template,
-                                 branch_name,
-                                 developers_can_merge,
-                                 developers_can_push):
+
+def action_set_branch_protection(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        branch_name: ActionParameter(
+            'branch',
+            required=True,
+            metavar='GIT_BRANCH',
+            help='Git branch name to set protection on.'
+        ),
+        developers_can_merge: ActionParameter(
+            'developers-can-merge',
+            default=False,
+            action='store_true',
+            help='Allow developers to merge into this branch.'
+        ),
+        developers_can_push: ActionParameter(
+            'developers-can-push',
+            default=False,
+            action='store_true',
+            help='Allow developers to merge into this branch.'
+        )
+    ):
+    """
+    Set branch protection on multiple projects.
+    """
+
     for user in users:
         project_path = project_template.format(**user.row)
         project = mg.get_canonical_project(glb, project_path)
@@ -65,7 +256,26 @@ def action_set_branch_protection(glb, users,
         branch.protect(developers_can_push=developers_can_push, developers_can_merge=developers_can_merge)
 
 
-def action_unprotect_branch(glb, users, project_template, branch_name):
+def action_unprotect_branch(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        branch_name: ActionParameter(
+            'branch',
+            required=True,
+            metavar='GIT_BRANCH',
+            help='Git branch name to unprotect.'
+        )
+    ):
+    """
+    Unprotect branch on multiple projects.
+    """
+
     for user in users:
         project_path = project_template.format(**user.row)
         project = mg.get_canonical_project(glb, project_path)
@@ -74,7 +284,27 @@ def action_unprotect_branch(glb, users, project_template, branch_name):
         print("Unprotecting branch {} on {}".format(branch.name, project.path_with_namespace))
         branch.unprotect()
 
-def action_add_member(glb, users, project_template, access_level):
+
+def action_add_member(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        access_level: ActionParameter(
+            'access-level',
+            required=True,
+            metavar='LEVEL',
+            help='Access level: devel or reporter.'
+        )
+    ):
+    """
+    Add members to multiple projects.
+    """
+
     if access_level == 'devel':
         level = gitlab.DEVELOPER_ACCESS
     elif access_level == 'reporter':
@@ -98,13 +328,47 @@ def action_add_member(glb, users, project_template, access_level):
             else:
                 print(" -> error: {}".format(exp))
 
-def action_get_file(glb,
-                    users,
-                    project_template,
-                    remote_file_template,
-                    local_file_template,
-                    branch,
-                    deadline):
+
+def action_get_file(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        remote_file_template: ActionParameter(
+            'remote-file',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        local_file_template: ActionParameter(
+            'local-file',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        branch: ActionParameter(
+            'branch',
+            default='master',
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        deadline: ActionParameter(
+            'deadline',
+            default='now',
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        )
+    ):
+    """
+    Get file from multiple repositories.
+    """
+
+    if deadline == 'now':
+        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
     for user in users:
         project_path = project_template.format(**user.row)
         remote_file = remote_file_template.format(**user.row)
@@ -126,13 +390,50 @@ def action_get_file(glb,
                 f.write(current_content)
 
 
-def action_put_file(glb, users,
-                    project_template,
-                    from_file_template,
-                    to_file_template,
-                    branch,
-                    commit_message_template,
-                    force_commit):
+def action_put_file(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        from_file_template: ActionParameter(
+            'from',
+            required=True,
+            metavar='LOCAL_FILE_PATH_WITH_FORMAT',
+            help='Local file path, including formatting.'
+        ),
+        to_file_template: ActionParameter(
+            'to',
+            required=True,
+            metavar='REMOTE_FILE_PATH_WITH_FORMAT',
+            help='Remote file path, including formatting.'
+        ),
+        branch: ActionParameter(
+            'branch',
+            default='master',
+            metavar='BRANCH',
+            help='Branch to commit to, defaults to master.'
+        ),
+        commit_message_template: ActionParameter(
+            'message',
+            default='Updating {GL[target_filename]}',
+            metavar='COMMIT_MESSAGE_WITH_FORMAT',
+            help='Commit message, including formatting.'
+        ),
+        force_commit: ActionParameter(
+            'force-commit',
+            default=False,
+            action='store_true',
+            help='Do not check current file content, always upload.'
+        )
+    ):
+    """
+    Upload file to multiple repositories.
+    """
+
     for user in users:
         project_path = project_template.format(**user.row)
         from_file = from_file_template.format(**user.row)
@@ -163,12 +464,49 @@ def action_put_file(glb, users,
         else:
             print("Not uploading {} to {} as there is no change.".format(from_file, project.path_with_namespace))
 
-def action_clone(glb, users,
-                 project_template,
-                 local_path_template,
-                 branch,
-                 commit,
-                 deadline):
+def action_clone(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        local_path_template: ActionParameter(
+            'to',
+            required=True,
+            metavar='LOCAL_PATH_WITH_FORMAT',
+            help='Local repository path, including formatting characters from CSV columns.'
+        ),
+        branch: ActionParameter(
+            'branch',
+            default='master',
+            metavar='BRANCH',
+            help='Branch to clone, defaults to master.'
+        ),
+        commit: ActionParameter(
+            'commit',
+            default=None,
+            metavar='COMMIT_WITH_FORMAT',
+            help='Commit to reset to after clone.'
+        ),
+        deadline: ActionParameter(
+            'deadline',
+            default='now',
+            metavar='YYYY-MM-DDTHH:MM:SSZ',
+            help='Submission deadline, take last commit before deadline (defaults to now).'
+        )
+    ):
+    """
+    Clone multiple repositories.
+    """
+
+    # FIXME: commit and deadline are mutually exclusive
+
+    if deadline == 'now':
+        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+
     for user in users:
         project = mg.get_canonical_project(glb, project_template.format(**user.row))
         local_path = local_path_template.format(**user.row)
@@ -180,17 +518,59 @@ def action_clone(glb, users,
         mg.clone_or_fetch(glb, project, local_path)
         mg.reset_to_commit(local_path, last_commit.id)
 
-def action_deadline_commits(glb, users,
-                            project_template,
-                            branch,
-                            deadline,
-                            output_header,
-                            output_template,
-                            output_filename):
+
+def action_deadline_commits(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        branch: ActionParameter(
+            'branch',
+            default='master',
+            metavar='BRANCH',
+            help='Branch name, defaults to master.'
+        ),
+        deadline: ActionParameter(
+            'deadline',
+            default='now',
+            metavar='YYYY-MM-DDTHH:MM:SSZ',
+            help='Submission deadline, take last commit before deadline (defaults to now).'
+        ),
+        output_header: ActionParameter(
+            'first-line',
+            default='login,commit',
+            metavar='OUTPUT_HEADER',
+            help='First line for the output.'
+        ),
+        output_template: ActionParameter(
+            'format',
+            default='{login},{commit.id}',
+            metavar='OUTPUT_ROW_WITH_FORMAT',
+            help='Formatting for the output row, defaults to {login},{commit.id}.'
+        ),
+        output_filename: ActionParameter(
+            'output',
+            default=None,
+            metavar='OUTPUT_FILENAME',
+            help='Output file, defaults to stdout.'
+        )
+    ):
+    """
+    Get last commits before deadline.
+    """
+
     if output_filename:
         output = open(output_filename, 'w')
     else:
         output = sys.stdout
+
+    if deadline == 'now':
+        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+
 
     print(output_header, file=output)
     for user in users:
@@ -204,354 +584,29 @@ def action_deadline_commits(glb, users,
     if output_filename:
         output.close()
 
+
 def main():
     locale.setlocale(locale.LC_ALL, '')
 
-    args_common = argparse.ArgumentParser(add_help=False)
-    args_common.add_argument('--debug',
-                             default=False,
-                             dest='debug',
-                             action='store_true',
-                             help='Print debugging messages.')
-    args_common.add_argument('--config-file',
-                             default=None,
-                             action='append',
-                             dest='gitlab_config_file',
-                             help='GitLab configuration file.')
-    args_common.add_argument('--instance',
-                             default=None,
-                             dest='gitlab_instance',
-                             help='Which GitLab instance to choose.')
+    cli = CommandParser()
+    cli.add_command('accounts', action_accounts)
+    cli.add_command('add-member', action_add_member)
+    cli.add_command('clone', action_clone)
+    cli.add_command('deadline-commit', action_deadline_commits)
+    cli.add_command('fork', action_fork)
+    cli.add_command('get-file', action_get_file)
+    cli.add_command('protect', action_set_branch_protection)
+    cli.add_command('put-file', action_put_file)
+    cli.add_command('unprotect', action_unprotect_branch)
 
-    args_users = argparse.ArgumentParser(add_help=False)
-    args_users.add_argument('--users',
-                            required=True,
-                            dest='csv_users',
-                            metavar='LIST.csv',
-                            help='CSV with users.')
-    args_users.add_argument('--login-column',
-                            dest='csv_users_login_column',
-                            default='login',
-                            metavar='COLUMN_NAME',
-                            help='Column name with login information')
+    config = cli.parse_args(sys.argv[1:])
 
-    args = argparse.ArgumentParser(description='Teachers GitLab for mass actions on GitLab')
-    args.set_defaults(action='help')
-    args_sub = args.add_subparsers(help='Select what to do')
-
-    args_help = args_sub.add_parser('help', help='Show this help.')
-    args_help.set_defaults(action='help')
-
-    args_accounts = args_sub.add_parser('accounts',
-                                        help='List accounts that were not found.',
-                                        parents=[args_common, args_users])
-    args_accounts.set_defaults(action='accounts')
-
-    args_fork = args_sub.add_parser('fork',
-                                    help='Fork one repo multiple times.',
-                                    parents=[args_common, args_users])
-    args_fork.set_defaults(action='fork')
-    args_fork.add_argument('--from',
-                           required=True,
-                           dest='fork_from',
-                           metavar='REPO_PATH',
-                           help='Parent repository path.')
-    args_fork.add_argument('--to',
-                           required=True,
-                           dest='fork_to',
-                           metavar='REPO_PATH_WITH_FORMAT',
-                           help='Target repository path, including ' \
-                                'formatting characters from CSV columns.')
-    args_fork.add_argument('--hide-fork',
-                           default=False,
-                           dest='fork_hide_relationship',
-                           action='store_true',
-                           help='Hide fork relationship.')
-
-    args_unprotect = args_sub.add_parser('unprotect',
-                                         help='Unprotect branch on multiple projects.',
-                                         parents=[args_common, args_users])
-    args_unprotect.set_defaults(action='unprotect')
-    args_unprotect.add_argument('--project',
-                                required=True,
-                                dest='project_path',
-                                metavar='PROJECT_PATH_WITH_FORMAT',
-                                help='Project path, including ' \
-                                     'formatting characters from CSV columns.')
-    args_unprotect.add_argument('--branch',
-                                required=True,
-                                dest='project_branch',
-                                metavar='GIT_BRANCH',
-                                help='Git branch name to unprotect')
-
-    args_protect = args_sub.add_parser('protect',
-                                       help='Set branch protection on multiple projects.',
-                                       parents=[args_common, args_users])
-    args_protect.set_defaults(action='protect')
-    args_protect.add_argument('--project',
-                              required=True,
-                              dest='project_path',
-                              metavar='PROJECT_PATH_WITH_FORMAT',
-                              help='Project path, including ' \
-                                   'formatting characters from CSV columns.')
-    args_protect.add_argument('--branch',
-                              required=True,
-                              dest='project_branch',
-                              metavar='GIT_BRANCH',
-                              help='Git branch name to unprotect')
-    args_protect.add_argument('--developers-can-merge',
-                              default=False,
-                              dest='developers_can_merge',
-                              action='store_true',
-                              help='Allow developers to merge into this branch.')
-    args_protect.add_argument('--developers-can-push',
-                              default=False,
-                              dest='developers_can_push',
-                              action='store_true',
-                              help='Allow developers to merge into this branch.')
-
-    args_add_member = args_sub.add_parser('add-member',
-                                          help='Add member on multiple projects.',
-                                          parents=[args_common, args_users])
-    args_add_member.set_defaults(action='add-member')
-    args_add_member.add_argument('--project',
-                                 required=True,
-                                 dest='project_path',
-                                 metavar='PROJECT_PATH_WITH_FORMAT',
-                                 help='Project path, including ' \
-                                      'formatting characters from CSV columns.')
-    args_add_member.add_argument('--access-level',
-                                 required=True,
-                                 dest='access_level',
-                                 metavar='LEVEL',
-                                 help='Access level: devel or reporter.')
-
-    args_get_file = args_sub.add_parser('get-file',
-                                        help='Get file from multiple repos.',
-                                        parents=[args_common, args_users])
-    args_get_file.set_defaults(action='get-file')
-    args_get_file.add_argument('--project',
-                               required=True,
-                               dest='project_path',
-                               metavar='PROJECT_PATH_WITH_FORMAT',
-                               help='Project path, including ' \
-                                    'formatting characters from CSV columns.')
-    args_get_file.add_argument('--remote-file',
-                               required=True,
-                               dest='file_remote',
-                               metavar='REMOTE_FILE_PATH_WITH_FORMAT',
-                               help='Remote file path, including formatting.')
-    args_get_file.add_argument('--local-file',
-                               required=True,
-                               dest='file_local',
-                               metavar='LOCAL_FILE_PATH_WITH_FORMAT',
-                               help='Local file path, including formatting.')
-    args_get_file.add_argument('--branch',
-                               default='master',
-                               dest='project_branch',
-                               metavar='BRANCH',
-                               help='Branch to commit to, defaults to master.')
-    args_get_file.add_argument('--deadline',
-                               default='now',
-                               dest='deadline',
-                               metavar='YYYY-MM-DDTHH:MM:SSZ',
-                               help='Submission deadline, ' \
-                                   'take last commit before deadline (defaults to now).')
-
-    args_put_file = args_sub.add_parser('put-file',
-                                        help='Upload file to multiple repos.',
-                                        parents=[args_common, args_users])
-    args_put_file.set_defaults(action='put-file')
-    args_put_file.add_argument('--project',
-                               required=True,
-                               dest='project_path',
-                               metavar='PROJECT_PATH_WITH_FORMAT',
-                               help='Project path, including ' \
-                                    'formatting characters from CSV columns.')
-    args_put_file.add_argument('--from',
-                               required=True,
-                               dest='file_from',
-                               metavar='LOCAL_FILE_PATH_WITH_FORMAT',
-                               help='Local file path, including formatting.')
-    args_put_file.add_argument('--to',
-                               required=True,
-                               dest='file_to',
-                               metavar='REMOTE_FILE_PATH_WITH_FORMAT',
-                               help='Remote file path, including formatting.')
-    args_put_file.add_argument('--branch',
-                               default='master',
-                               dest='project_branch',
-                               metavar='BRANCH',
-                               help='Branch to commit to, defaults to master.')
-    args_put_file.add_argument('--message',
-                               default='Updating {GL[target_filename]}',
-                               dest='commit_message',
-                               metavar='COMMIT_MESSAGE_WITH_FORMAT',
-                               help='Commit message, including formatting.')
-    args_put_file.add_argument('--force-commit',
-                               default=False,
-                               dest='force_commit',
-                               action='store_true',
-                               help='Do not check current file content, always upload.')
-
-    args_clone = args_sub.add_parser('clone',
-                                     help='Clone multiple repos.',
-                                     parents=[args_common, args_users])
-    args_clone.set_defaults(action='clone')
-    args_clone.add_argument('--project',
-                            required=True,
-                            dest='project_path',
-                            metavar='PROJECT_PATH_WITH_FORMAT',
-                            help='Project path, including ' \
-                                 'formatting characters from CSV columns.')
-    args_clone.add_argument('--to',
-                            required=True,
-                            dest='clone_to',
-                            metavar='LOCAL_PATH_WITH_FORMAT',
-                            help='Local repository path, including ' \
-                                'formatting characters from CSV columns.')
-    args_clone.add_argument('--branch',
-                            default='master',
-                            dest='project_branch',
-                            metavar='BRANCH',
-                            help='Branch to checkout.')
-    args_clone_commit_spec = args_clone.add_mutually_exclusive_group()
-    args_clone_commit_spec.add_argument('--deadline',
-                                        default='now',
-                                        dest='deadline',
-                                        metavar='YYYY-MM-DDTHH:MM:SSZ',
-                                        help='Submission deadline, ' \
-                                            'take last commit before deadline (defaults to now).')
-    args_clone_commit_spec.add_argument('--commit',
-                                        default=None,
-                                        dest='clone_commit',
-                                        metavar='COMMIT_WITH_FORMAT',
-                                        help='Commit to reset to after clone.')
-
-    args_deadline_commit = args_sub.add_parser('deadline-commit',
-                                     help='Get last commits before deadline.',
-                                     parents=[args_common, args_users])
-    args_deadline_commit.set_defaults(action='deadline-commit')
-    args_deadline_commit.add_argument('--project',
-                                      required=True,
-                                      dest='project_path',
-                                      metavar='PROJECT_PATH_WITH_FORMAT',
-                                      help='Project path, including ' \
-                                          'formatting characters from CSV columns.')
-    args_deadline_commit.add_argument('--branch',
-                                      default='master',
-                                      dest='project_branch',
-                                      metavar='BRANCH',
-                                      help='Branch to use.')
-    args_deadline_commit.add_argument('--deadline',
-                                      default='now',
-                                      dest='deadline',
-                                      metavar='YYYY-MM-DDTHH:MM:SSZ',
-                                      help='Submission deadline, ' \
-                                         'take last commit before deadline (defaults to now).')
-    args_deadline_commit.add_argument('--first-line',
-                                      default='login,commit',
-                                      dest='output_header',
-                                      metavar='OUTPUT_HEADER',
-                                      help='First line for the output.')
-    args_deadline_commit.add_argument('--format',
-                                      default='{login},{commit.id}',
-                                      dest='output_format',
-                                      metavar='OUTPUT_ROW_WITH_FORMAT',
-                                      help='Formatting for the output row, ' \
-                                          'defaults to {login},{commit.id}.')
-    args_deadline_commit.add_argument('--output',
-                                      default=None,
-                                      dest='output_filename',
-                                      metavar='OUTPUT_FILENAME',
-                                      help='Output file, defaults to stdout.')
-
-    if len(sys.argv) < 2:
-        # pylint: disable=too-few-public-methods
-        class HelpConfig:
-            def __init__(self):
-                self.action = 'help'
-        config = HelpConfig()
-    else:
-        config = args.parse_args()
-
-    if config.action == 'help':
-        args.print_help()
+    if config.func is None:
+        cli.print_help()
         return
 
-    glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
-
-    if hasattr(config, 'csv_users'):
-        users_csv = load_users(config.csv_users)
-        users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
-
-    if config.action == 'accounts':
-        action_accounts(users)
-    elif config.action == 'clone':
-        if config.deadline == 'now':
-            config.deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
-        action_clone(glb,
-                     users,
-                     config.project_path,
-                     config.clone_to,
-                     config.project_branch,
-                     config.clone_commit,
-                     config.deadline)
-    elif config.action == 'deadline-commit':
-        if config.deadline == 'now':
-            config.deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
-        action_deadline_commits(glb,
-                                users,
-                                config.project_path,
-                                config.project_branch,
-                                config.deadline,
-                                config.output_header,
-                                config.output_format,
-                                config.output_filename)
-    elif config.action == 'fork':
-        action_fork(glb,
-                    users,
-                    config.fork_from,
-                    config.fork_to,
-                    config.fork_hide_relationship)
-    elif config.action == 'unprotect':
-        action_unprotect_branch(glb,
-                                users,
-                                config.project_path,
-                                config.project_branch)
-    elif config.action == 'protect':
-        action_set_branch_protection(glb,
-                                     users,
-                                     config.project_path,
-                                     config.project_branch,
-                                     config.developers_can_merge,
-                                     config.developers_can_push)
-    elif config.action == 'add-member':
-        action_add_member(glb,
-                          users,
-                          config.project_path,
-                          config.access_level)
-    elif config.action == 'get-file':
-        if config.deadline == 'now':
-            config.deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
-        action_get_file(glb,
-                        users,
-                        config.project_path,
-                        config.file_remote,
-                        config.file_local,
-                        config.project_branch,
-                        config.deadline)
-    elif config.action == 'put-file':
-        action_put_file(glb,
-                        users,
-                        config.project_path,
-                        config.file_from,
-                        config.file_to,
-                        config.project_branch,
-                        config.commit_message,
-                        config.force_commit)
-    else:
-        raise Exception("Unknown action.")
+    glb = cli.get_gitlab_instance()
+    config.func(glb, config)
 
 if __name__ == '__main__':
     main()
