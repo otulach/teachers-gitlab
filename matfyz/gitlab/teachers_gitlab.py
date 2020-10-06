@@ -14,36 +14,80 @@ import time
 import gitlab
 import matfyz.gitlab.utils as mg
 
+class Parameter:
+    def __init__(self):
+        pass
 
-class ActionParameter:
+    def register(self, argument_name, subparser):
+        pass
+
+    def get_value(self, argument_name, glb, parsed_options):
+        pass
+
+class UserListParameter(Parameter):
+    def __init__(self):
+        Parameter.__init__(self)
+
+    def register(self, argument_name, subparser):
+        subparser.add_argument(
+            '--users',
+            required=True,
+            dest='csv_users',
+            metavar='LIST.csv',
+            help='CSV with users.'
+        )
+        subparser.add_argument(
+            '--login-column',
+            dest='csv_users_login_column',
+            default='login',
+            metavar='COLUMN_NAME',
+            help='Column name with login information'
+        )
+
+    def get_value(self, argument_name, glb, parsed_options):
+        users = []
+        with open(parsed_options.csv_users) as inp:
+            data = csv.DictReader(inp)
+            users = list(data)
+            return as_gitlab_users(glb, users, parsed_options.csv_users_login_column)
+
+class ActionParameter(Parameter):
     def __init__(self, name, **kwargs):
+        Parameter.__init__(self)
         self.name = name
         self.extra_args = kwargs
 
-def register_command(name, callback_func, command_parser, parser_common, parser_users):
+    def register(self, argument_name, subparser):
+        subparser.add_argument(
+            '--' + self.name,
+            dest='arg_' + argument_name,
+            **self.extra_args
+        )
+
+    def get_value(self, argument_name, glb, parsed_options):
+        return getattr(parsed_options, 'arg_' + argument_name)
+
+
+def register_command(name, callback_func, command_parser, parser_common):
     short_help = callback_func.__doc__
     if short_help is not None:
         short_help = short_help.strip().split("\n")[0]
     parser = command_parser.add_parser(
         name,
         help=short_help,
-        parents=[parser_common, parser_users]
+        parents=[parser_common]
     )
     for dest, param in callback_func.__annotations__.items():
-        parser.add_argument(
-            '--' + param.name,
-            dest='command_' + dest,
-            **param.extra_args
-        )
+        param.register(dest, parser)
 
-    def callback_wrapper(glb, users, cfg, callback):
+    def callback_wrapper(glb, cfg, callback):
         kwargs = {}
         for dest, param in callback.__annotations__.items():
-            kwargs[dest] = getattr(cfg, 'command_' + dest)
-        callback(glb, users, **kwargs)
+            kwargs[dest] = param.get_value(dest, glb, cfg)
+        callback(glb, **kwargs)
 
     parser.set_defaults(action='error')
-    parser.set_defaults(func=lambda glb, users, cfg: callback_wrapper(glb, users, cfg, callback_func))
+    parser.set_defaults(func=lambda glb, cfg: callback_wrapper(glb, cfg, callback_func))
 
 
 
@@ -64,14 +108,14 @@ def as_gitlab_users(glb, users, login_column):
         yield user_obj
 
 
-def action_accounts(users):
+def action_accounts(glb, users: UserListParameter()):
     for _ in users:
         pass
 
 
 def action_fork(
         glb,
-        users,
+        users: UserListParameter(),
         from_project: ActionParameter(
             'from',
             required=True,
@@ -114,7 +158,7 @@ def action_fork(
 
 def action_set_branch_protection(
         glb,
-        users,
+        users: UserListParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -155,7 +199,7 @@ def action_set_branch_protection(
 
 def action_unprotect_branch(
         glb,
-        users,
+        users: UserListParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -184,7 +228,7 @@ def action_unprotect_branch(
 
 def action_add_member(
         glb,
-        users,
+        users: UserListParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -228,7 +272,7 @@ def action_add_member(
 
 def action_get_file(
         glb,
-        users,
+        users: UserListParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -289,7 +333,7 @@ def action_get_file(
 
 def action_put_file(
         glb,
-        users,
+        users: UserListParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -363,7 +407,7 @@ def action_put_file(
 
 def action_clone(
         glb,
-        users,
+        users: UserListParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -418,7 +462,7 @@ def action_clone(
 
 def action_deadline_commits(
         glb,
-        users,
+        users: UserListParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -501,18 +545,6 @@ def main():
                              dest='gitlab_instance',
                              help='Which GitLab instance to choose.')
 
-    args_users = argparse.ArgumentParser(add_help=False)
-    args_users.add_argument('--users',
-                            required=True,
-                            dest='csv_users',
-                            metavar='LIST.csv',
-                            help='CSV with users.')
-    args_users.add_argument('--login-column',
-                            dest='csv_users_login_column',
-                            default='login',
-                            metavar='COLUMN_NAME',
-                            help='Column name with login information')
-
     args = argparse.ArgumentParser(description='Teachers GitLab for mass actions on GitLab')
     args.set_defaults(action='help')
     args_sub = args.add_subparsers(help='Select what to do')
@@ -520,66 +552,59 @@ def main():
     args_help = args_sub.add_parser('help', help='Show this help.')
     args_help.set_defaults(action='help')
 
-    args_accounts = args_sub.add_parser('accounts',
-                                        help='List accounts that were not found.',
-                                        parents=[args_common, args_users])
-    args_accounts.set_defaults(action='accounts')
-
+    register_command(
+        'accounts',
+        action_accounts,
+        args_sub,
+        args_common
+    )
     register_command(
         'get-file',
         action_get_file,
         args_sub,
-        args_common,
-        args_users
+        args_common
     )
     register_command(
         'fork',
         action_fork,
         args_sub,
-        args_common,
-        args_users
+        args_common
     )
     register_command(
         'unprotect',
         action_unprotect_branch,
         args_sub,
-        args_common,
-        args_users
+        args_common
     )
     register_command(
         'protect',
         action_set_branch_protection,
         args_sub,
-        args_common,
-        args_users
+        args_common
     )
     register_command(
         'add-member',
         action_add_member,
         args_sub,
-        args_common,
-        args_users
+        args_common
     )
     register_command(
         'put-file',
         action_put_file,
         args_sub,
-        args_common,
-        args_users
+        args_common
     )
     register_command(
         'clone',
         action_clone,
         args_sub,
-        args_common,
-        args_users
+        args_common
     )
     register_command(
         'deadline-commit',
         action_deadline_commits,
         args_sub,
-        args_common,
-        args_users
+        args_common
     )
 
     if len(sys.argv) < 2:
@@ -597,18 +622,7 @@ def main():
 
     glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
 
-    if hasattr(config, 'csv_users'):
-        users_csv = load_users(config.csv_users)
-        users = as_gitlab_users(glb, users_csv, config.csv_users_login_column)
-    else:
-        users = None
-
-    if hasattr(config, 'func'):
-        config.func(glb, users, config)
-    elif config.action == 'accounts':
-        action_accounts(users)
-    else:
-        raise Exception("Unknown action.")
+    config.func(glb, config)
 
 if __name__ == '__main__':
     main()
