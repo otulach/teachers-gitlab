@@ -106,11 +106,11 @@ class CommandParser:
             description='Teachers GitLab for mass actions on GitLab'
         )
 
-        self.args.set_defaults(action='help')
+        self.args.set_defaults(func=None)
         self.args_sub = self.args.add_subparsers(help='Select what to do')
 
         args_help = self.args_sub.add_parser('help', help='Show this help.')
-        args_help.set_defaults(action='help')
+        args_help.set_defaults(func=None)
 
         self.parsed_options = None
 
