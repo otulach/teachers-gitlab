@@ -15,6 +15,9 @@ import gitlab
 import matfyz.gitlab.utils as mg
 
 class Parameter:
+    """
+    Base class for parameter annotation.
+    """
     def __init__(self):
         pass
 
@@ -25,6 +28,9 @@ class Parameter:
         pass
 
 class UserListParameter(Parameter):
+    """
+    Parameter annotation to mark list of users.
+    """
     def __init__(self):
         Parameter.__init__(self)
 
@@ -52,6 +58,9 @@ class UserListParameter(Parameter):
             return as_gitlab_users(glb, users, parsed_options.csv_users_login_column)
 
 class ActionParameter(Parameter):
+    """
+    Parameter annotation to create corresponding CLI option.
+    """
     def __init__(self, name, **kwargs):
         Parameter.__init__(self)
         self.name = name
