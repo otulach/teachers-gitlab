@@ -5,6 +5,8 @@
 
 import argparse
 import csv
+import collections
+import json
 import locale
 import sys
 import http
@@ -464,6 +466,81 @@ def action_put_file(
         else:
             print("Not uploading {} to {} as there is no change.".format(from_file, project.path_with_namespace))
 
+
+def action_get_last_pipeline(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        branch: ActionParameter(
+            'branch',
+            default='master',
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+        summary_only: ActionParameter(
+            'summary-only',
+            default=False,
+            action='store_true',
+            help='Print only summaries (ratio of states across projects)'
+        )
+    ):
+    """
+    Get pipeline status of multiple projects.
+    """
+
+    result = {}
+    pipeline_states_only = []
+    for user in users:
+        project_path = project_template.format(**user.row)
+
+        try:
+            project = mg.get_canonical_project(glb, project_path)
+        except gitlab.exceptions.GitlabGetError:
+            print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
+            continue
+
+        pipelines = project.pipelines.list()
+        if len(pipelines) == 0:
+            result[project.path_with_namespace] = {
+                "status": "none"
+            }
+            pipeline_states_only.append("none")
+            continue
+
+        last_pipeline = pipelines[0]
+
+        entry = {
+            "status": last_pipeline.status,
+            "id": last_pipeline.id,
+            "commit": last_pipeline.sha,
+            "jobs": [],
+        }
+        pipeline_states_only.append(last_pipeline.status)
+
+        for job in last_pipeline.jobs.list():
+            entry["jobs"].append({
+                "status": job.status,
+                "id": job.id,
+                "name": job.name,
+            })
+
+        result[project.path_with_namespace] = entry
+
+    if summary_only:
+        summary_by_overall_status = collections.Counter(pipeline_states_only)
+        states_len = len(pipeline_states_only)
+        for state, count in summary_by_overall_status.most_common():
+            print("{}: {} ({:.0f}%)".format(state, count, 100 * count / states_len))
+        print("total: {}".format(states_len))
+    else:
+        print(json.dumps(result, indent=4))
+
+
 def action_clone(
         glb,
         users: UserListParameter(),
@@ -595,6 +672,7 @@ def main():
     cli.add_command('deadline-commit', action_deadline_commits)
     cli.add_command('fork', action_fork)
     cli.add_command('get-file', action_get_file)
+    cli.add_command('get-last-pipeline', action_get_last_pipeline)
     cli.add_command('protect', action_set_branch_protection)
     cli.add_command('put-file', action_put_file)
     cli.add_command('unprotect', action_unprotect_branch)

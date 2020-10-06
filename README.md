@@ -159,3 +159,22 @@ Get specific file before a given deadline.
     --remote-file "quiz-01.json" \
     --local-file "quiz-01-{login}.json"
 ```
+
+## `get-last-pipeline`
+
+Get status of last pipeline as JSON.
+
+```shell
+./teachers_gitlab.sh get-file \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2020-summer/solution-{number}-{login}"
+```
+
+```shell
+./teachers_gitlab.sh get-file \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
+    --summary-only
+```
