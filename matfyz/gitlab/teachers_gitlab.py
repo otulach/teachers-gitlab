@@ -580,42 +580,15 @@ def main():
     locale.setlocale(locale.LC_ALL, '')
 
     cli = CommandParser()
-    cli.add_command(
-        'accounts',
-        action_accounts
-    )
-    cli.add_command(
-        'get-file',
-        action_get_file,
-    )
-    cli.add_command(
-        'fork',
-        action_fork,
-    )
-    cli.add_command(
-        'unprotect',
-        action_unprotect_branch,
-    )
-    cli.add_command(
-        'protect',
-        action_set_branch_protection,
-    )
-    cli.add_command(
-        'add-member',
-        action_add_member,
-    )
-    cli.add_command(
-        'put-file',
-        action_put_file,
-    )
-    cli.add_command(
-        'clone',
-        action_clone,
-    )
-    cli.add_command(
-        'deadline-commit',
-        action_deadline_commits,
-    )
+    cli.add_command('accounts', action_accounts)
+    cli.add_command('add-member', action_add_member)
+    cli.add_command('clone', action_clone)
+    cli.add_command('deadline-commit', action_deadline_commits)
+    cli.add_command('fork', action_fork)
+    cli.add_command('get-file', action_get_file)
+    cli.add_command('protect', action_set_branch_protection)
+    cli.add_command('put-file', action_put_file)
+    cli.add_command('unprotect', action_unprotect_branch)
 
     config = cli.parse_args(sys.argv[1:])
 
