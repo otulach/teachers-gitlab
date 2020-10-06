@@ -156,6 +156,9 @@ def as_gitlab_users(glb, users, login_column):
 
 
 def action_accounts(glb, users: UserListParameter()):
+    """
+    List accounts that were not found.
+    """
     for _ in users:
         pass
 
