@@ -67,34 +67,81 @@ class ActionParameter(Parameter):
     def get_value(self, argument_name, glb, parsed_options):
         return getattr(parsed_options, 'arg_' + argument_name)
 
+class CommandParser:
+    def __init__(self):
+        self.args_common = argparse.ArgumentParser(add_help=False)
+        self.args_common.add_argument(
+            '--debug',
+            default=False,
+            dest='debug',
+            action='store_true',
+            help='Print debugging messages.'
+        )
+        self.args_common.add_argument(
+            '--config-file',
+            default=None,
+            action='append',
+            dest='gitlab_config_file',
+            help='GitLab configuration file.'
+        )
+        self.args_common.add_argument(
+            '--instance',
+            default=None,
+            dest='gitlab_instance',
+            help='Which GitLab instance to choose.'
+        )
 
-def register_command(name, callback_func, command_parser, parser_common):
-    short_help = callback_func.__doc__
-    if short_help is not None:
-        short_help = short_help.strip().split("\n")[0]
-    parser = command_parser.add_parser(
-        name,
-        help=short_help,
-        parents=[parser_common]
-    )
-    for dest, param in callback_func.__annotations__.items():
-        param.register(dest, parser)
+        self.args = argparse.ArgumentParser(
+            description='Teachers GitLab for mass actions on GitLab'
+        )
 
-    def callback_wrapper(glb, cfg, callback):
-        kwargs = {}
-        for dest, param in callback.__annotations__.items():
-            kwargs[dest] = param.get_value(dest, glb, cfg)
-        callback(glb, **kwargs)
+        self.args.set_defaults(action='help')
+        self.args_sub = self.args.add_subparsers(help='Select what to do')
 
-    parser.set_defaults(action='error')
-    parser.set_defaults(func=lambda glb, cfg: callback_wrapper(glb, cfg, callback_func))
+        args_help = self.args_sub.add_parser('help', help='Show this help.')
+        args_help.set_defaults(action='help')
 
+        self.parsed_options = None
 
+    def add_command(self, name, callback_func):
+        short_help = callback_func.__doc__
+        if short_help is not None:
+            short_help = short_help.strip().split("\n")[0]
+        parser = self.args_sub.add_parser(
+            name,
+            help=short_help,
+            parents=[self.args_common]
+        )
+        for dest, param in callback_func.__annotations__.items():
+            param.register(dest, parser)
 
-def load_users(path):
-    with open(path) as inp:
-        data = csv.DictReader(inp)
-        return list(data)
+        def callback_wrapper(glb, cfg, callback):
+            kwargs = {}
+            for dest, param in callback.__annotations__.items():
+                kwargs[dest] = param.get_value(dest, glb, cfg)
+            callback(glb, **kwargs)
+
+        parser.set_defaults(func=lambda glb, cfg: callback_wrapper(glb, cfg, callback_func))
+
+    def parse_args(self, argv):
+        if len(argv) < 2:
+            # pylint: disable=too-few-public-methods
+            class HelpConfig:
+                def __init__(self):
+                    self.func = None
+            self.parsed_options = HelpConfig()
+        else:
+            self.parsed_options = self.args.parse_args(argv)
+        return self.parsed_options
+
+    def print_help(self):
+        self.args.print_help()
+
+    def get_gitlab_instance(self):
+        return gitlab.Gitlab.from_config(
+            self.parsed_options.gitlab_instance,
+            self.parsed_options.gitlab_config_file
+        )
 
 def as_gitlab_users(glb, users, login_column):
     for user in users:
@@ -529,99 +576,51 @@ def action_deadline_commits(
 def main():
     locale.setlocale(locale.LC_ALL, '')
 
-    args_common = argparse.ArgumentParser(add_help=False)
-    args_common.add_argument('--debug',
-                             default=False,
-                             dest='debug',
-                             action='store_true',
-                             help='Print debugging messages.')
-    args_common.add_argument('--config-file',
-                             default=None,
-                             action='append',
-                             dest='gitlab_config_file',
-                             help='GitLab configuration file.')
-    args_common.add_argument('--instance',
-                             default=None,
-                             dest='gitlab_instance',
-                             help='Which GitLab instance to choose.')
-
-    args = argparse.ArgumentParser(description='Teachers GitLab for mass actions on GitLab')
-    args.set_defaults(action='help')
-    args_sub = args.add_subparsers(help='Select what to do')
-
-    args_help = args_sub.add_parser('help', help='Show this help.')
-    args_help.set_defaults(action='help')
-
-    register_command(
+    cli = CommandParser()
+    cli.add_command(
         'accounts',
-        action_accounts,
-        args_sub,
-        args_common
+        action_accounts
     )
-    register_command(
+    cli.add_command(
         'get-file',
         action_get_file,
-        args_sub,
-        args_common
     )
-    register_command(
+    cli.add_command(
         'fork',
         action_fork,
-        args_sub,
-        args_common
     )
-    register_command(
+    cli.add_command(
         'unprotect',
         action_unprotect_branch,
-        args_sub,
-        args_common
     )
-    register_command(
+    cli.add_command(
         'protect',
         action_set_branch_protection,
-        args_sub,
-        args_common
     )
-    register_command(
+    cli.add_command(
         'add-member',
         action_add_member,
-        args_sub,
-        args_common
     )
-    register_command(
+    cli.add_command(
         'put-file',
         action_put_file,
-        args_sub,
-        args_common
     )
-    register_command(
+    cli.add_command(
         'clone',
         action_clone,
-        args_sub,
-        args_common
     )
-    register_command(
+    cli.add_command(
         'deadline-commit',
         action_deadline_commits,
-        args_sub,
-        args_common
     )
 
-    if len(sys.argv) < 2:
-        # pylint: disable=too-few-public-methods
-        class HelpConfig:
-            def __init__(self):
-                self.action = 'help'
-        config = HelpConfig()
-    else:
-        config = args.parse_args()
+    config = cli.parse_args(sys.argv[1:])
 
-    if config.action == 'help':
-        args.print_help()
+    if config.func is None:
+        cli.print_help()
         return
 
-    glb = gitlab.Gitlab.from_config(config.gitlab_instance, config.gitlab_config_file)
-
+    glb = cli.get_gitlab_instance()
     config.func(glb, config)
 
 if __name__ == '__main__':
