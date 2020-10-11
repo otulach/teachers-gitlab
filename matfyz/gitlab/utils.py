@@ -14,12 +14,14 @@ import subprocess
 import time
 import gitlab
 
+
 def get_canonical_project(glb, project):
     if isinstance(project, (int, str)):
         return glb.projects.get(project)
     if isinstance(project, gitlab.v4.objects.Project):
         return project
     raise Exception("Unexpected object type.")
+
 
 def retries(n=None, interval=2, timeout=None, message="Operation timed-out (too many retries)"):
     """
@@ -46,7 +48,7 @@ def wait_for_project_to_be_forked(glb, project_path, timeout=None):
     project = get_canonical_project(glb, project_path)
 
     # In 10 minutes, even Torvalds' Linux repository is forked
-    # on a not-that-fast instance :-) 
+    # on a not-that-fast instance :-)
     for i in retries(120, 5, timeout):
         if not project.empty_repo:
             return
@@ -83,6 +85,7 @@ def remove_fork_relationship(glb, project):
         else:
             raise
 
+
 def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_message):
     project = get_canonical_project(glb, project)
     commit_data = {
@@ -105,6 +108,7 @@ def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_
         else:
             raise
 
+
 def get_file_contents(glb, project, branch, file_path):
     project = get_canonical_project(glb, project)
     base_filename = os.path.basename(file_path)
@@ -116,13 +120,15 @@ def get_file_contents(glb, project, branch, file_path):
     content = base64.b64decode(file_info['content'])
     return content
 
+
 def get_commit_before_deadline(glb, project, deadline, branch):
     project = get_canonical_project(glb, project)
-    commits = project.commits.list(ref_name=branch, until=deadline)
+    commits = project.commits.list(ref_name=branch, until=deadline, first_parent=True)
     if not commits:
         raise Exception("No matching commit found.")
     else:
         return commits[0]
+
 
 def clone_or_fetch(glb, project, local_path):
     if os.path.isdir(os.path.join(local_path, '.git')):
@@ -142,6 +148,7 @@ def clone_or_fetch(glb, project, local_path):
     rc = subprocess.call(['git', 'clone', git_url, local_path])
     if rc != 0:
         raise Exception("git clone failed")
+
 
 def reset_to_commit(local_path, commit):
     rc = subprocess.call(['git', 'reset', '--hard', commit], cwd=local_path)
