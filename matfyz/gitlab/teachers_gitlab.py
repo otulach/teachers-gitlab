@@ -414,6 +414,7 @@ def action_get_file(
 def action_put_file(
         glb,
         users: UserListParameter(),
+        dry_run: DryRunParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -481,7 +482,8 @@ def action_put_file(
 
         if commit_needed:
             print("Uploading {} to {} as {}".format(from_file, project.path_with_namespace, to_file))
-            mg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
+            if not dry_run:
+                mg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
         else:
             print("Not uploading {} to {} as there is no change.".format(from_file, project.path_with_namespace))
 
