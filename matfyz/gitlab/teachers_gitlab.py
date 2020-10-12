@@ -59,6 +59,25 @@ class UserListParameter(Parameter):
             users = list(data)
             return as_gitlab_users(glb, users, parsed_options.csv_users_login_column)
 
+class DryRunParameter(Parameter):
+    """
+    Parameter annotation to mark switch for dry run.
+    """
+    def __init__(self):
+        Parameter.__init__(self)
+
+    def register(self, argument_name, subparser):
+        subparser.add_argument(
+            '--dry-run',
+            dest='dry_run',
+            default=False,
+            action='store_true',
+            help='Simulate but do not make any real changes.'
+        )
+
+    def get_value(self, argument_name, glb, parsed_options):
+        return parsed_options.dry_run
+
 class ActionParameter(Parameter):
     """
     Parameter annotation to create corresponding CLI option.
