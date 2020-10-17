@@ -12,6 +12,7 @@ import sys
 import http
 import os
 import pathlib
+import re
 import time
 import gitlab
 import matfyz.gitlab.utils as mg
@@ -363,6 +364,12 @@ def action_get_file(
             default='now',
             metavar='PROJECT_PATH_WITH_FORMAT',
             help='Project path, including formatting characters from CSV columns.'
+        ),
+        blacklist: ActionParameter(
+            'blacklist',
+            default=None,
+            metavar='BLACKLIST',
+            help='Commit authors to ignore (regular expression).'
         )
     ):
     """
@@ -371,6 +378,12 @@ def action_get_file(
 
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+
+    if blacklist:
+        filter = lambda commit: not re.fullmatch (blacklist, commit.author_email)
+    else:
+        filter = lambda commit: True
+
     for user in users:
         project_path = project_template.format(**user.row)
         remote_file = remote_file_template.format(**user.row)
@@ -382,7 +395,12 @@ def action_get_file(
             print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
             continue
 
-        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
+        try:
+            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
+        except Exception:
+            print("No matching commit in {}.".format(project.path_with_namespace))
+            continue
+
         current_content = mg.get_file_contents(glb, project, last_commit.id, remote_file)
         if current_content is None:
             print("File {} does not exist in {}.".format(remote_file, project.path_with_namespace))
@@ -573,6 +591,12 @@ def action_clone(
             default='now',
             metavar='YYYY-MM-DDTHH:MM:SSZ',
             help='Submission deadline, take last commit before deadline (defaults to now).'
+        ),
+        blacklist: ActionParameter(
+            'blacklist',
+            default=None,
+            metavar='BLACKLIST',
+            help='Commit authors to ignore (regular expression).'
         )
     ):
     """
@@ -584,6 +608,11 @@ def action_clone(
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
+    if blacklist:
+        filter = lambda commit: not re.fullmatch (blacklist, commit.author_email)
+    else:
+        filter = lambda commit: True
+
     for user in users:
         project = mg.get_canonical_project(glb, project_template.format(**user.row))
         local_path = local_path_template.format(**user.row)
@@ -591,7 +620,7 @@ def action_clone(
         if commit:
             last_commit = project.commits.get(commit.format(**user.row))
         else:
-            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
+            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
         mg.clone_or_fetch(glb, project, local_path)
         mg.reset_to_commit(local_path, last_commit.id)
 
@@ -616,6 +645,12 @@ def action_deadline_commits(
             default='now',
             metavar='YYYY-MM-DDTHH:MM:SSZ',
             help='Submission deadline, take last commit before deadline (defaults to now).'
+        ),
+        blacklist: ActionParameter(
+            'blacklist',
+            default=None,
+            metavar='BLACKLIST',
+            help='Commit authors to ignore (regular expression).'
         ),
         output_header: ActionParameter(
             'first-line',
@@ -648,12 +683,16 @@ def action_deadline_commits(
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
+    if blacklist:
+        filter = lambda commit: not re.fullmatch (blacklist, commit.author_email)
+    else:
+        filter = lambda commit: True
 
     print(output_header, file=output)
     for user in users:
         project = project_template.format(**user.row)
         try:
-            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch)
+            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
             line = output_template.format(commit=last_commit, **user.row)
             print(line, file=output)
         except gitlab.exceptions.GitlabGetError:

@@ -121,13 +121,13 @@ def get_file_contents(glb, project, branch, file_path):
     return content
 
 
-def get_commit_before_deadline(glb, project, deadline, branch):
+def get_commit_before_deadline(glb, project, deadline, branch, filter = lambda commit: True):
     project = get_canonical_project(glb, project)
-    commits = project.commits.list(ref_name=branch, until=deadline, first_parent=True)
-    if not commits:
-        raise Exception("No matching commit found.")
-    else:
-        return commits[0]
+    commits = project.commits.list(ref_name=branch, until=deadline)
+    for commit in commits:
+        if filter (commit):
+            return (commit)
+    raise Exception("No matching commit found.")
 
 
 def clone_or_fetch(glb, project, local_path):
