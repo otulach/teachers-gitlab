@@ -17,6 +17,22 @@ import time
 import gitlab
 import matfyz.gitlab.utils as mg
 
+_registered_commands = []
+
+def register_command(name):
+    def decorator(func):
+        _registered_commands.append({
+            'name': name,
+            'func': func
+        })
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def get_registered_commands():
+    return _registered_commands[:]
+
 class Parameter:
     """
     Base class for parameter annotation.
@@ -209,6 +225,7 @@ def as_existing_gitlab_projects(glb, users, project_template):
             continue
 
 
+@register_command('accounts')
 def action_accounts(glb, users: UserListParameter()):
     """
     List accounts that were not found.
@@ -217,6 +234,7 @@ def action_accounts(glb, users: UserListParameter()):
         pass
 
 
+@register_command('fork')
 def action_fork(
         glb,
         users: UserListParameter(),
@@ -260,6 +278,7 @@ def action_fork(
             mg.remove_fork_relationship(glb, to_project)
 
 
+@register_command('protect')
 def action_set_branch_protection(
         glb,
         users: UserListParameter(),
@@ -298,6 +317,7 @@ def action_set_branch_protection(
         branch.protect(developers_can_push=developers_can_push, developers_can_merge=developers_can_merge)
 
 
+@register_command('unprotect')
 def action_unprotect_branch(
         glb,
         users: UserListParameter(),
@@ -324,6 +344,7 @@ def action_unprotect_branch(
         branch.unprotect()
 
 
+@register_command('add-member')
 def action_add_member(
         glb,
         users: UserListParameter(),
@@ -365,6 +386,7 @@ def action_add_member(
                 print(" -> error: {}".format(exp))
 
 
+@register_command('get-file')
 def action_get_file(
         glb,
         users: UserListParameter(),
@@ -436,6 +458,7 @@ def action_get_file(
                 f.write(current_content)
 
 
+@register_command('put-file')
 def action_put_file(
         glb,
         users: UserListParameter(),
@@ -507,6 +530,7 @@ def action_put_file(
             print("Not uploading {} to {} as there is no change.".format(from_file, project.path_with_namespace))
 
 
+@register_command('get-last-pipeline')
 def action_get_last_pipeline(
         glb,
         users: UserListParameter(),
@@ -573,6 +597,7 @@ def action_get_last_pipeline(
         print(json.dumps(result, indent=4))
 
 
+@register_command('clone')
 def action_clone(
         glb,
         users: UserListParameter(),
@@ -639,6 +664,7 @@ def action_clone(
         mg.reset_to_commit(local_path, last_commit.id)
 
 
+@register_command('deadline-commit')
 def action_deadline_commits(
         glb,
         users: UserListParameter(),
@@ -713,6 +739,7 @@ def action_deadline_commits(
         output.close()
 
 
+@register_command('commit-stats')
 def action_commit_stats(
         glb,
         users: UserListParameter(),
@@ -760,17 +787,9 @@ def main():
     locale.setlocale(locale.LC_ALL, '')
 
     cli = CommandParser()
-    cli.add_command('accounts', action_accounts)
-    cli.add_command('add-member', action_add_member)
-    cli.add_command('clone', action_clone)
-    cli.add_command('commit-stats', action_commit_stats)
-    cli.add_command('deadline-commit', action_deadline_commits)
-    cli.add_command('fork', action_fork)
-    cli.add_command('get-file', action_get_file)
-    cli.add_command('get-last-pipeline', action_get_last_pipeline)
-    cli.add_command('protect', action_set_branch_protection)
-    cli.add_command('put-file', action_put_file)
-    cli.add_command('unprotect', action_unprotect_branch)
+
+    for cmd in get_registered_commands():
+        cli.add_command(cmd['name'], cmd['func'])
 
     config = cli.parse_args(sys.argv[1:])
 
