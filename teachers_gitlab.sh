@@ -11,4 +11,4 @@ MY_HOME="$( cd "$MY_HOME" && echo "$PWD" )"
 
 exec env \
     PYTHONPATH="$PYTHONPATH:$MY_HOME" \
-    python -m matfyz.gitlab.teachers_gitlab "$@"
+    python3 -m matfyz.gitlab.teachers_gitlab "$@"
