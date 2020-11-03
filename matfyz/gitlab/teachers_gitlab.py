@@ -179,7 +179,7 @@ def as_gitlab_users(glb, users, login_column):
         user_login = user.get(login_column)
         matching_users = glb.users.list(username=user_login)
         if len(matching_users) == 0:
-            print("WARNING: user {} not found!".format(user_login))
+            print("WARNING: user {} not found!".format(user_login), file=sys.stderr)
             continue
         user_obj = matching_users[0]
         user_obj.row = user
