@@ -722,6 +722,49 @@ def action_deadline_commits(
         output.close()
 
 
+def action_commit_stats(
+        glb,
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, including formatting characters from CSV columns.'
+        ),
+    ):
+    """
+    Get basic added/removed lines for projects.
+    """
+
+    result = []
+    processed_projects = {}
+
+    for user in users:
+        project_path = project_template.format(**user.row)
+        if project_path in processed_projects:
+            continue
+        processed_projects[project_path] = True
+        project = mg.get_canonical_project(glb, project_path)
+        commits = project.commits.list(all=True, as_list=False)
+        commit_details = {}
+        for c in commits:
+            info = project.commits.get(c.id)
+            commit_details[c.id] = {
+                'parents': info.parent_ids,
+                'subject': info.title,
+                'line_stats': info.stats,
+                'author_email': info.author_email,
+                'author_date': info.authored_date,
+            }
+
+        result.append({
+            'project': project.path_with_namespace,
+            'commits': commit_details,
+        })
+
+    print(json.dumps(result, indent=4))
+
+
 def main():
     locale.setlocale(locale.LC_ALL, '')
 
@@ -729,6 +772,7 @@ def main():
     cli.add_command('accounts', action_accounts)
     cli.add_command('add-member', action_add_member)
     cli.add_command('clone', action_clone)
+    cli.add_command('commit-stats', action_commit_stats)
     cli.add_command('deadline-commit', action_deadline_commits)
     cli.add_command('fork', action_fork)
     cli.add_command('get-file', action_get_file)

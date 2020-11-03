@@ -178,3 +178,14 @@ Get status of last pipeline as JSON.
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
     --summary-only
 ```
+
+## `commit-stats`
+
+Overview of all commits, including line statistics, as JSON.
+
+```shell
+./teachers_gitlab.sh commit-stats \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2020-summer/solution-{number}-{login}"
+```
