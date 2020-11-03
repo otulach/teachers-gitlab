@@ -185,6 +185,29 @@ def as_gitlab_users(glb, users, login_column):
         user_obj.row = user
         yield user_obj
 
+def as_existing_gitlab_projects(glb, users, project_template):
+    """
+    Convert list of users to list of projects.
+
+    List of users (e.g. from UserListParameter) is converted to
+    a tuple of user and project, formatted according to given
+    project template.
+
+    Unknown projects are skipped, warning message is printed.
+
+    Returns a generator (yields).
+    """
+
+    for user in users:
+        project_path = project_template.format(**user.row)
+
+        try:
+            project = mg.get_canonical_project(glb, project_path)
+            yield user, project
+        except gitlab.exceptions.GitlabGetError:
+            print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
+            continue
+
 
 def action_accounts(glb, users: UserListParameter()):
     """
@@ -269,10 +292,7 @@ def action_set_branch_protection(
     Set branch protection on multiple projects.
     """
 
-    for user in users:
-        project_path = project_template.format(**user.row)
-        project = mg.get_canonical_project(glb, project_path)
-
+    for _, project in as_existing_gitlab_projects(glb, users, project_template):
         branch = project.branches.get(branch_name)
         print("Setting protection on branch {} in {}".format(branch.name, project.path_with_namespace))
         branch.protect(developers_can_push=developers_can_push, developers_can_merge=developers_can_merge)
@@ -298,10 +318,7 @@ def action_unprotect_branch(
     Unprotect branch on multiple projects.
     """
 
-    for user in users:
-        project_path = project_template.format(**user.row)
-        project = mg.get_canonical_project(glb, project_path)
-
+    for _, project in as_existing_gitlab_projects(glb, users, project_template):
         branch = project.branches.get(branch_name)
         print("Unprotecting branch {} on {}".format(branch.name, project.path_with_namespace))
         branch.unprotect()
@@ -334,10 +351,7 @@ def action_add_member(
     else:
         raise Exception("Unsupported access level.")
 
-    for user in users:
-        project_path = project_template.format(**user.row)
-        project = mg.get_canonical_project(glb, project_path)
-
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
         try:
             print("Adding {} to {} (level {})".format(user.username, project.path_with_namespace, level))
             project.members.create({
@@ -403,16 +417,9 @@ def action_get_file(
     else:
         filter = lambda commit: True
 
-    for user in users:
-        project_path = project_template.format(**user.row)
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
         remote_file = remote_file_template.format(**user.row)
         local_file = local_file_template.format(**user.row)
-
-        try:
-            project = mg.get_canonical_project(glb, project_path)
-        except gitlab.exceptions.GitlabGetError:
-            print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
-            continue
 
         try:
             last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
@@ -474,8 +481,7 @@ def action_put_file(
     Upload file to multiple repositories.
     """
 
-    for user in users:
-        project_path = project_template.format(**user.row)
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
         from_file = from_file_template.format(**user.row)
         to_file = to_file_template.format(**user.row)
         extras = {
@@ -483,11 +489,6 @@ def action_put_file(
         }
         commit_message = commit_message_template.format(GL=extras, **user.row)
 
-        try:
-            project = mg.get_canonical_project(glb, project_path)
-        except gitlab.exceptions.GitlabGetError:
-            print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
-            continue
         from_file_content = pathlib.Path(from_file).read_text()
 
         commit_needed = force_commit
@@ -534,15 +535,7 @@ def action_get_last_pipeline(
 
     result = {}
     pipeline_states_only = []
-    for user in users:
-        project_path = project_template.format(**user.row)
-
-        try:
-            project = mg.get_canonical_project(glb, project_path)
-        except gitlab.exceptions.GitlabGetError:
-            print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
-            continue
-
+    for _, project in as_existing_gitlab_projects(glb, users, project_template):
         pipelines = project.pipelines.list()
         if len(pipelines) == 0:
             result[project.path_with_namespace] = {
@@ -710,14 +703,12 @@ def action_deadline_commits(
         filter = lambda commit: True
 
     print(output_header, file=output)
-    for user in users:
-        project = project_template.format(**user.row)
-        try:
-            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
-            line = output_template.format(commit=last_commit, **user.row)
-            print(line, file=output)
-        except gitlab.exceptions.GitlabGetError:
-            print("WARNING: project {} not found!".format(project), file=sys.stderr)
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
+        line = output_template.format(commit=last_commit, **user.row)
+        print(line, file=output)
+
     if output_filename:
         output.close()
 
@@ -739,12 +730,12 @@ def action_commit_stats(
     result = []
     processed_projects = {}
 
-    for user in users:
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
         project_path = project_template.format(**user.row)
         if project_path in processed_projects:
             continue
         processed_projects[project_path] = True
-        project = mg.get_canonical_project(glb, project_path)
+
         commits = project.commits.list(all=True, as_list=False)
         commit_details = {}
         for c in commits:
