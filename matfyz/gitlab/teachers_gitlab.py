@@ -50,8 +50,9 @@ class UserListParameter(Parameter):
     """
     Parameter annotation to mark list of users.
     """
-    def __init__(self):
+    def __init__(self, has_to_be_gitlab_users=True):
         Parameter.__init__(self)
+        self.return_as_gitlab_users = has_to_be_gitlab_users
 
     def register(self, argument_name, subparser):
         subparser.add_argument(
@@ -77,9 +78,16 @@ class UserListParameter(Parameter):
                 user_login = user.get(parsed_options.csv_users_login_column)
                 matching_users = glb.users.list(username=user_login)
                 if len(matching_users) == 0:
-                    print("WARNING: user {} not found!".format(user_login), file=sys.stderr)
-                    continue
-                user_obj = matching_users[0]
+                    if self.return_as_gitlab_users:
+                        print("WARNING: user {} not found!".format(user_login), file=sys.stderr)
+                        continue
+                    else:
+                        class UserMock:
+                            def __init__(self, name):
+                                self.username = name
+                        user_obj = UserMock(user_login)
+                else:
+                    user_obj = matching_users[0]
                 user_obj.row = user
                 yield user_obj
 
@@ -597,7 +605,7 @@ def action_get_last_pipeline(
 @register_command('clone')
 def action_clone(
         glb,
-        users: UserListParameter(),
+        users: UserListParameter(False),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -649,7 +657,7 @@ def action_clone(
     else:
         filter = lambda commit: True
 
-    for user in users:
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
         project = mg.get_canonical_project(glb, project_template.format(**user.row))
         local_path = local_path_template.format(**user.row)
 
