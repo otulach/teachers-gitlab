@@ -73,8 +73,16 @@ class UserListParameter(Parameter):
         users = []
         with open(parsed_options.csv_users) as inp:
             data = csv.DictReader(inp)
-            users = list(data)
-            return as_gitlab_users(glb, users, parsed_options.csv_users_login_column)
+            for user in data:
+                user_login = user.get(parsed_options.csv_users_login_column)
+                matching_users = glb.users.list(username=user_login)
+                if len(matching_users) == 0:
+                    print("WARNING: user {} not found!".format(user_login), file=sys.stderr)
+                    continue
+                user_obj = matching_users[0]
+                user_obj.row = user
+                yield user_obj
+
 
 class DryRunParameter(Parameter):
     """
@@ -189,17 +197,6 @@ class CommandParser:
             self.parsed_options.gitlab_instance,
             self.parsed_options.gitlab_config_file
         )
-
-def as_gitlab_users(glb, users, login_column):
-    for user in users:
-        user_login = user.get(login_column)
-        matching_users = glb.users.list(username=user_login)
-        if len(matching_users) == 0:
-            print("WARNING: user {} not found!".format(user_login), file=sys.stderr)
-            continue
-        user_obj = matching_users[0]
-        user_obj.row = user
-        yield user_obj
 
 def as_existing_gitlab_projects(glb, users, project_template):
     """
