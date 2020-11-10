@@ -130,8 +130,8 @@ def get_commit_before_deadline(glb, project, deadline, branch, filter = lambda c
     project = get_canonical_project(glb, project)
     commits = project.commits.list(ref_name=branch, until=deadline)
     for commit in commits:
-        if filter (commit):
-            return (commit)
+        if filter(commit):
+            return commit
     raise Exception("No matching commit found.")
 
 
