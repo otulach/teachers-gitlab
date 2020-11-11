@@ -681,7 +681,7 @@ def action_clone(
             'deadline',
             default='now',
             metavar='YYYY-MM-DDTHH:MM:SSZ',
-            help='Submission deadline, take last commit before deadline (defaults to now).'
+            help='Submission deadline (defaults to now).'
         ),
         blacklist: ActionParameter(
             'blacklist',
@@ -743,7 +743,7 @@ def action_deadline_commits(
             'deadline',
             default='now',
             metavar='YYYY-MM-DDTHH:MM:SSZ',
-            help='Submission deadline, take last commit before deadline (defaults to now).'
+            help='Submission deadline (defaults to now).'
         ),
         blacklist: ActionParameter(
             'blacklist',
