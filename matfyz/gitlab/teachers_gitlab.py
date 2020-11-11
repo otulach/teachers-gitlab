@@ -206,7 +206,7 @@ class CommandParser:
             self.parsed_options.gitlab_config_file
         )
 
-def as_existing_gitlab_projects(glb, users, project_template):
+def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=True):
     """
     Convert list of users to list of projects.
 
@@ -219,8 +219,14 @@ def as_existing_gitlab_projects(glb, users, project_template):
     Returns a generator (yields).
     """
 
+    processed_projects = {}
     for user in users:
         project_path = project_template.format(**user.row)
+
+        # Skip already seen projects when needed
+        if (not allow_duplicates) and (project_path in processed_projects):
+            continue
+        processed_projects[project_path] = True
 
         try:
             project = mg.get_canonical_project(glb, project_path)
@@ -316,7 +322,7 @@ def action_set_branch_protection(
     Set branch protection on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template):
+    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         branch = project.branches.get(branch_name)
         print("Setting protection on branch {} in {}".format(branch.name, project.path_with_namespace))
         branch.protect(developers_can_push=developers_can_push, developers_can_merge=developers_can_merge)
@@ -343,7 +349,7 @@ def action_unprotect_branch(
     Unprotect branch on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template):
+    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         branch = project.branches.get(branch_name)
         print("Unprotecting branch {} on {}".format(branch.name, project.path_with_namespace))
         branch.unprotect()
@@ -564,7 +570,7 @@ def action_get_last_pipeline(
 
     result = {}
     pipeline_states_only = []
-    for _, project in as_existing_gitlab_projects(glb, users, project_template):
+    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         pipelines = project.pipelines.list()
         if len(pipelines) == 0:
             result[project.path_with_namespace] = {
@@ -767,14 +773,7 @@ def action_commit_stats(
     """
 
     result = []
-    processed_projects = {}
-
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project_path = project_template.format(**user.row)
-        if project_path in processed_projects:
-            continue
-        processed_projects[project_path] = True
-
+    for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
         commits = project.commits.list(all=True, as_list=False)
         commit_details = {}
         for c in commits:
