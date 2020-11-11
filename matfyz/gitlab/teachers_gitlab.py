@@ -66,10 +66,20 @@ class Parameter:
         pass
 
     def register(self, argument_name, subparser):
-        pass
+        """
+        Callback to add itself to the argparse subparser.
+
+        :param argument_name: Used for dest in argparse.
+        """
 
     def get_value(self, argument_name, glb, parsed_options):
-        pass
+        """
+        Get actual value of the parameter.
+
+        :param argument_name: dest as used by argparse.
+        :param glb: Initialized GitLab instance.
+        :param parsed_options: Object of parsed option from argparse.
+        """
 
 class GitlabInstanceParameter(Parameter):
     """
@@ -118,6 +128,9 @@ class UserListParameter(Parameter):
         )
 
     def get_gitlab_user(self, glb, user_login):
+        """
+        Find or mock a given GitLab user.
+        """
         matching_users = glb.users.list(username=user_login)
         if len(matching_users) == 0:
             if self.mock_users:
@@ -227,6 +240,10 @@ class CommandParser:
         self.parsed_options = None
 
     def add_command(self, name, callback_func):
+        """
+        Add whole subcommand.
+        """
+
         short_help = callback_func.__doc__
         if short_help is not None:
             short_help = short_help.strip().split("\n")[0]
@@ -248,13 +265,21 @@ class CommandParser:
         parser.set_defaults(command_name_=name)
 
     def parse_args(self, argv):
+        """
+        Wrapper around argparse.parse_args.
+        """
+
         if len(argv) < 1:
             self.parsed_options = self.args.parse_args(['help'])
         else:
             self.parsed_options = self.args.parse_args(argv)
+
         return self.parsed_options
 
     def print_help(self):
+        """
+        Wrapper around argparse.print_help.
+        """
         self.args.print_help()
 
     def get_gitlab_instance(self):
@@ -921,12 +946,20 @@ def action_commit_stats(
     print(json.dumps(result, indent=4))
 
 def init_logging(logging_level):
+    """
+    Initialize logging subsystem with a reasonable format.
+    """
+
     logging.basicConfig(
         format='[%(asctime)s %(name)-25s %(levelname)7s] %(message)s',
         level=logging_level
     )
 
 def main():
+    """
+    Main parses the arguments and only delegates the work.
+    """
+
     locale.setlocale(locale.LC_ALL, '')
 
     cli = CommandParser()

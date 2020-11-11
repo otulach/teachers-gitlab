@@ -18,6 +18,12 @@ import pytz
 
 
 def get_canonical_project(glb, project):
+    """
+    Ensure we have instance of gitlab...Project.
+
+    :param project: Either object already or path or project id.
+    """
+
     if isinstance(project, (int, str)):
         return glb.projects.get(project)
     if isinstance(project, gitlab.v4.objects.Project):
@@ -52,6 +58,10 @@ def retries(
 
 
 def wait_for_project_to_be_forked(glb, project_path, timeout=None):
+    """
+    Wait until given project is not empty (forking complete).
+    """
+
     project = get_canonical_project(glb, project_path)
 
     # In 10 minutes, even Torvalds' Linux repository is forked
@@ -64,6 +74,10 @@ def wait_for_project_to_be_forked(glb, project_path, timeout=None):
 
 
 def fork_project_idempotent(glb, parent, fork_namespace, fork_name):
+    """
+    Fork existing project or nothing if already forked.
+    """
+
     parent = get_canonical_project(glb, parent)
 
     try:
@@ -83,6 +97,10 @@ def fork_project_idempotent(glb, parent, fork_namespace, fork_name):
 
 
 def remove_fork_relationship(glb, project):
+    """
+    Remove the 'forked from' relationship of a project.
+    """
+
     project = get_canonical_project(glb, project)
     try:
         project.delete_fork_relation()
@@ -94,6 +112,10 @@ def remove_fork_relationship(glb, project):
 
 
 def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_message):
+    """
+    Commit a file, overwriting existing content forcefully.
+    """
+
     project = get_canonical_project(glb, project)
     commit_data = {
         'branch': branch,
@@ -117,6 +139,10 @@ def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_
 
 
 def get_file_contents(glb, project, branch, file_path):
+    """
+    Retrieve current file contents on a GitLab repository.
+    """
+
     project = get_canonical_project(glb, project)
     base_filename = os.path.basename(file_path)
     files = project.repository_tree(
@@ -134,6 +160,10 @@ def get_file_contents(glb, project, branch, file_path):
 
 
 def get_timestamp(ts):
+    """
+    Try to convert any string to datetime with a timezone.
+    """
+
     result = dateparser.parse(ts)
     try:
         tz = pytz.timezone('UTC')
@@ -143,6 +173,10 @@ def get_timestamp(ts):
         return result
 
 def get_commit_with_tag(glb, project, tag_name):
+    """
+    Find commit with given tag in a project.
+    """
+
     project = get_canonical_project(glb, project)
     for t in project.tags.list():
         if t.name == tag_name:
@@ -157,6 +191,9 @@ def get_commit_before_deadline(
         commit_filter=lambda commit: True,
         tag=None
     ):
+    """
+    Get last commit just before the deadline but prefer a tag if available.
+    """
     project = get_canonical_project(glb, project)
     if tag:
         commit = get_commit_with_tag(glb, project, tag)
@@ -177,6 +214,9 @@ def get_commit_before_deadline(
 
 
 def clone_or_fetch(glb, project, local_path):
+    """
+    Clone or update (fetch) to a local repository.
+    """
     if os.path.isdir(os.path.join(local_path, '.git')):
         rc = subprocess.call(['git', 'fetch'], cwd=local_path)
         if rc != 0:
@@ -197,6 +237,9 @@ def clone_or_fetch(glb, project, local_path):
 
 
 def reset_to_commit(local_path, commit):
+    """
+    Reset a local repository to a given commit.
+    """
     rc = subprocess.call(['git', 'reset', '--hard', commit], cwd=local_path)
     if rc != 0:
         raise Exception("git reset failed")
