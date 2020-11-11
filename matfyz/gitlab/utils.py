@@ -7,9 +7,11 @@ Helper GitLab functions.
 """
 
 import base64
+import dateparser
 import http
 import os
 import pathlib
+import pytz
 import subprocess
 import time
 import gitlab
@@ -126,8 +128,35 @@ def get_file_contents(glb, project, branch, file_path):
     return content
 
 
-def get_commit_before_deadline(glb, project, deadline, branch, filter = lambda commit: True):
+def get_timestamp(ts):
+    result = dateparser.parse(ts)
+    try:
+        tz = pytz.timezone('UTC')
+        return tz.localize(result)
+    except ValueError:
+        # Time zone already set
+        return result
+
+def get_commit_with_tag(glb, project, tag_name):
     project = get_canonical_project(glb, project)
+    for t in project.tags.list():
+        if t.name == tag_name:
+            return t.commit
+    return None
+
+def get_commit_before_deadline(glb, project, deadline, branch, filter = lambda commit: True, tag=None):
+    project = get_canonical_project(glb, project)
+    if tag:
+        commit = get_commit_with_tag(glb, project, tag)
+        if commit:
+            ts = get_timestamp(commit['created_at'])
+            ts_deadline = get_timestamp(deadline)
+            if ts <= ts_deadline:
+                commit = project.commits.get(commit['id'])
+                return commit
+            else:
+                # Tag is after deadline, fallback to normal resolution
+                pass
     commits = project.commits.list(ref_name=branch, until=deadline)
     for commit in commits:
         if filter(commit):

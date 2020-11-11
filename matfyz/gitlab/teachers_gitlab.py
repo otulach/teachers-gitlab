@@ -685,6 +685,12 @@ def action_deadline_commits(
             metavar='BRANCH',
             help='Branch name, defaults to master.'
         ),
+        prefer_tag: ActionParameter(
+            'prefer-tag',
+            default=None,
+            metavar='TAG',
+            help='Prefer commit with this tag (but also before deadline).'
+        ),
         deadline: ActionParameter(
             'deadline',
             default='now',
@@ -736,7 +742,8 @@ def action_deadline_commits(
     print(output_header, file=output)
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
+        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter, prefer_tag)
+
         line = output_template.format(commit=last_commit, **user.row)
         print(line, file=output)
 
