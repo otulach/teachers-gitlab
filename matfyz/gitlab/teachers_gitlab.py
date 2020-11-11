@@ -8,6 +8,7 @@ import csv
 import collections
 import json
 import locale
+import logging
 import sys
 import http
 import os
@@ -56,6 +57,17 @@ class GitlabInstanceParameter(Parameter):
 
     def get_value(self, argument_name, glb, parsed_options):
         return glb
+
+class LoggerParameter(Parameter):
+    """
+    Parameter annotation to mark command logger.
+    """
+
+    def __init__(self):
+        Parameter.__init__(self)
+
+    def get_value(self, argument_name, glb, parsed_options):
+        return logging.getLogger(parsed_options.command_name_)
 
 class UserListParameter(Parameter):
     """
@@ -195,6 +207,7 @@ class CommandParser:
             callback(**kwargs)
 
         parser.set_defaults(func=lambda glb, cfg: callback_wrapper(glb, cfg, callback_func))
+        parser.set_defaults(command_name_=name)
 
     def parse_args(self, argv):
         if len(argv) < 1:
@@ -797,6 +810,11 @@ def action_commit_stats(
 
     print(json.dumps(result, indent=4))
 
+def init_logging(logging_level):
+    logging.basicConfig(
+        format='[%(asctime)s %(name)-25s %(levelname)7s] %(message)s',
+        level=logging_level
+    )
 
 def main():
     locale.setlocale(locale.LC_ALL, '')
@@ -807,6 +825,8 @@ def main():
         cli.add_command(cmd['name'], cmd['func'])
 
     config = cli.parse_args(sys.argv[1:])
+
+    init_logging(logging.DEBUG if config.debug else logging.INFO)
 
     if config.func is None:
         cli.print_help()
