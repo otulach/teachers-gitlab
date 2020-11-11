@@ -94,6 +94,7 @@ class UserListParameter(Parameter):
         )
 
     def get_value(self, argument_name, glb, parsed_options):
+        logger = logging.getLogger('gitlab-user-list')
         with open(parsed_options.csv_users) as inp:
             data = csv.DictReader(inp)
             for user in data:
@@ -101,7 +102,7 @@ class UserListParameter(Parameter):
                 matching_users = glb.users.list(username=user_login)
                 if len(matching_users) == 0:
                     if self.return_as_gitlab_users:
-                        print("WARNING: user {} not found!".format(user_login), file=sys.stderr)
+                        logger.warning("User %s not found.", user_login)
                         continue
                     else:
                         class UserMock:
@@ -242,6 +243,7 @@ def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=T
     Returns a generator (yields).
     """
 
+    logger = logging.getLogger('gitlab-project-list')
     processed_projects = {}
     for user in users:
         project_path = project_template.format(**user.row)
@@ -255,7 +257,7 @@ def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=T
             project = mg.get_canonical_project(glb, project_path)
             yield user, project
         except gitlab.exceptions.GitlabGetError:
-            print("WARNING: project {} not found!".format(project_path), file=sys.stderr)
+            logger.warning("Project %s not found.", project_path)
             continue
 
 
@@ -271,6 +273,7 @@ def action_accounts(users: UserListParameter()):
 @register_command('fork')
 def action_fork(
         glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
         users: UserListParameter(),
         from_project: ActionParameter(
             'from',
@@ -302,9 +305,14 @@ def action_fork(
         to_namespace = os.path.dirname(to_full_path)
         to_name = os.path.basename(to_full_path)
 
-        print("Forking {} to {}/{} for user {}".format(from_project.path_with_namespace,
-                                                       to_namespace, to_name,
-                                                       user.username))
+        logger.info(
+            "Forking %s to %s/%s for user %s",
+            from_project.path_with_namespace,
+            to_namespace,
+            to_name,
+            user.username
+        )
+
         to_project = mg.fork_project_idempotent(glb, from_project, to_namespace, to_name)
         mg.wait_for_project_to_be_forked(glb, to_project)
 
@@ -315,6 +323,7 @@ def action_fork(
 @register_command('protect')
 def action_set_branch_protection(
         glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -347,13 +356,14 @@ def action_set_branch_protection(
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         branch = project.branches.get(branch_name)
-        print("Setting protection on branch {} in {}".format(branch.name, project.path_with_namespace))
+        logger.info("Protecting branch %s in %s", branch.name, project.path_with_namespace)
         branch.protect(developers_can_push=developers_can_push, developers_can_merge=developers_can_merge)
 
 
 @register_command('unprotect')
 def action_unprotect_branch(
         glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -374,13 +384,14 @@ def action_unprotect_branch(
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         branch = project.branches.get(branch_name)
-        print("Unprotecting branch {} on {}".format(branch.name, project.path_with_namespace))
+        logger.info("Unprotecting branch %s in %s", branch.name, project.path_with_namespace)
         branch.unprotect()
 
 
 @register_command('add-member')
 def action_add_member(
         glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -408,7 +419,7 @@ def action_add_member(
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         try:
-            print("Adding {} to {} (level {})".format(user.username, project.path_with_namespace, level))
+            logger.warning("Adding %s to %s (as %s)", user.username, project.path_with_namespace, level)
             project.members.create({
                 'user_id' : user.id,
                 'access_level' : level,
@@ -417,12 +428,19 @@ def action_add_member(
             if exp.response_code == http.HTTPStatus.CONFLICT:
                 pass
             else:
-                print(" -> error: {}".format(exp))
+                logger.error(
+                    "Failed to add %s to %s (as %s): %s",
+                    user.username,
+                    project.path_with_namespace,
+                    level,
+                    exp
+                )
 
 
 @register_command('get-file')
 def action_get_file(
         glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -480,14 +498,19 @@ def action_get_file(
         try:
             last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
         except Exception:
-            print("No matching commit in {}.".format(project.path_with_namespace))
+            logger.error("No matching commit in %s", project.path_with_namespace)
             continue
 
         current_content = mg.get_file_contents(glb, project, last_commit.id, remote_file)
         if current_content is None:
-            print("File {} does not exist in {}.".format(remote_file, project.path_with_namespace))
+            logger.error("File %s does not exist in %s", remote_file, project.path_with_namespace)
         else:
-            print("File {} in {} has {}B.".format(remote_file, project.path_with_namespace, len(current_content)))
+            logger.info(
+                "File %s in %s has %dB.",
+                remote_file,
+                project.path_with_namespace,
+                len(current_content)
+            )
             with open(local_file, "wb") as f:
                 f.write(current_content)
 
@@ -495,6 +518,7 @@ def action_get_file(
 @register_command('put-file')
 def action_put_file(
         glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
         users: UserListParameter(),
         dry_run: DryRunParameter(),
         project_template: ActionParameter(
@@ -557,11 +581,11 @@ def action_put_file(
                 commit_needed = True
 
         if commit_needed:
-            print("Uploading {} to {} as {}".format(from_file, project.path_with_namespace, to_file))
+            logger.info("Uploading %s to %s as %s", from_file, project.path_with_namespace, to_file)
             if not dry_run:
                 mg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
         else:
-            print("Not uploading {} to {} as there is no change.".format(from_file, project.path_with_namespace))
+            logger.info("No change in %s at %s.", from_file, project.path_with_namespace)
 
 
 @register_command('get-last-pipeline')
@@ -695,6 +719,7 @@ def action_clone(
 @register_command('deadline-commit')
 def action_deadline_commits(
         glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -766,6 +791,7 @@ def action_deadline_commits(
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter, prefer_tag)
+        logger.debug("%s at %s", project.path_with_namespace, last_commit.id)
 
         line = output_template.format(commit=last_commit, **user.row)
         print(line, file=output)
