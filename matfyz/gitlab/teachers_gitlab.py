@@ -46,6 +46,17 @@ class Parameter:
     def get_value(self, argument_name, glb, parsed_options):
         pass
 
+class GitlabInstanceParameter(Parameter):
+    """
+    Parameter annotation to mark GitLab instance object.
+    """
+
+    def __init__(self):
+        Parameter.__init__(self)
+
+    def get_value(self, argument_name, glb, parsed_options):
+        return glb
+
 class UserListParameter(Parameter):
     """
     Parameter annotation to mark list of users.
@@ -181,7 +192,7 @@ class CommandParser:
             kwargs = {}
             for dest, param in callback.__annotations__.items():
                 kwargs[dest] = param.get_value(dest, glb, cfg)
-            callback(glb, **kwargs)
+            callback(**kwargs)
 
         parser.set_defaults(func=lambda glb, cfg: callback_wrapper(glb, cfg, callback_func))
 
@@ -236,7 +247,7 @@ def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=T
 
 
 @register_command('accounts')
-def action_accounts(glb, users: UserListParameter()):
+def action_accounts(users: UserListParameter()):
     """
     List accounts that were not found.
     """
@@ -246,7 +257,7 @@ def action_accounts(glb, users: UserListParameter()):
 
 @register_command('fork')
 def action_fork(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         from_project: ActionParameter(
             'from',
@@ -290,7 +301,7 @@ def action_fork(
 
 @register_command('protect')
 def action_set_branch_protection(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -329,7 +340,7 @@ def action_set_branch_protection(
 
 @register_command('unprotect')
 def action_unprotect_branch(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -356,7 +367,7 @@ def action_unprotect_branch(
 
 @register_command('add-member')
 def action_add_member(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -398,7 +409,7 @@ def action_add_member(
 
 @register_command('get-file')
 def action_get_file(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -470,7 +481,7 @@ def action_get_file(
 
 @register_command('put-file')
 def action_put_file(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         dry_run: DryRunParameter(),
         project_template: ActionParameter(
@@ -542,7 +553,7 @@ def action_put_file(
 
 @register_command('get-last-pipeline')
 def action_get_last_pipeline(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -603,7 +614,7 @@ def action_get_last_pipeline(
 
 @register_command('clone')
 def action_clone(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(False),
         project_template: ActionParameter(
             'project',
@@ -670,7 +681,7 @@ def action_clone(
 
 @register_command('deadline-commit')
 def action_deadline_commits(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
@@ -752,7 +763,7 @@ def action_deadline_commits(
 
 @register_command('commit-stats')
 def action_commit_stats(
-        glb,
+        glb: GitlabInstanceParameter(),
         users: UserListParameter(),
         project_template: ActionParameter(
             'project',
