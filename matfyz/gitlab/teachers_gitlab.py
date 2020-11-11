@@ -285,7 +285,7 @@ def action_fork(
             'to',
             required=True,
             metavar='REPO_PATH_WITH_FORMAT',
-            help='Target repository path, including formatting characters from CSV columns.'
+            help='Target repository path, formatted from CSV columns.'
         ),
         hide_fork: ActionParameter(
             'hide-fork',
@@ -329,7 +329,7 @@ def action_set_branch_protection(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         branch_name: ActionParameter(
             'branch',
@@ -369,7 +369,7 @@ def action_unprotect_branch(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         branch_name: ActionParameter(
             'branch',
@@ -397,7 +397,7 @@ def action_add_member(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         access_level: ActionParameter(
             'access-level',
@@ -446,31 +446,31 @@ def action_get_file(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         remote_file_template: ActionParameter(
             'remote-file',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns..'
         ),
         local_file_template: ActionParameter(
             'local-file',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         branch: ActionParameter(
             'branch',
             default='master',
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         deadline: ActionParameter(
             'deadline',
             default='now',
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         blacklist: ActionParameter(
             'blacklist',
@@ -525,19 +525,19 @@ def action_put_file(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         from_file_template: ActionParameter(
             'from',
             required=True,
             metavar='LOCAL_FILE_PATH_WITH_FORMAT',
-            help='Local file path, including formatting.'
+            help='Local file path, formatted from CSV columns.'
         ),
         to_file_template: ActionParameter(
             'to',
             required=True,
             metavar='REMOTE_FILE_PATH_WITH_FORMAT',
-            help='Remote file path, including formatting.'
+            help='Remote file path, formatted from CSV columns.'
         ),
         branch: ActionParameter(
             'branch',
@@ -549,7 +549,7 @@ def action_put_file(
             'message',
             default='Updating {GL[target_filename]}',
             metavar='COMMIT_MESSAGE_WITH_FORMAT',
-            help='Commit message, including formatting.'
+            help='Commit message, formatted from CSV columns.'
         ),
         force_commit: ActionParameter(
             'force-commit',
@@ -596,7 +596,7 @@ def action_get_last_pipeline(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         summary_only: ActionParameter(
             'summary-only',
@@ -657,13 +657,13 @@ def action_clone(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         local_path_template: ActionParameter(
             'to',
             required=True,
             metavar='LOCAL_PATH_WITH_FORMAT',
-            help='Local repository path, including formatting characters from CSV columns.'
+            help='Local repository path, formatted from CSV columns.'
         ),
         branch: ActionParameter(
             'branch',
@@ -725,7 +725,7 @@ def action_deadline_commits(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
         branch: ActionParameter(
             'branch',
@@ -808,7 +808,7 @@ def action_commit_stats(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
+            help='Project path, formatted from CSV columns.'
         ),
     ):
     """
