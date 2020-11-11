@@ -51,7 +51,7 @@ def wait_for_project_to_be_forked(glb, project_path, timeout=None):
 
     # In 10 minutes, even Torvalds' Linux repository is forked
     # on a not-that-fast instance :-)
-    for i in retries(120, 5, timeout):
+    for _ in retries(120, 5, timeout):
         if not project.empty_repo:
             return
         # Force refresh (why project.refresh() does not work?)

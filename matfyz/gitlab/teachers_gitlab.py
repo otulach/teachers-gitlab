@@ -71,7 +71,6 @@ class UserListParameter(Parameter):
         )
 
     def get_value(self, argument_name, glb, parsed_options):
-        users = []
         with open(parsed_options.csv_users) as inp:
             data = csv.DictReader(inp)
             for user in data:
@@ -551,12 +550,6 @@ def action_get_last_pipeline(
             metavar='PROJECT_PATH_WITH_FORMAT',
             help='Project path, including formatting characters from CSV columns.'
         ),
-        branch: ActionParameter(
-            'branch',
-            default='master',
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, including formatting characters from CSV columns.'
-        ),
         summary_only: ActionParameter(
             'summary-only',
             default=False,
@@ -773,7 +766,7 @@ def action_commit_stats(
     """
 
     result = []
-    for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         commits = project.commits.list(all=True, as_list=False)
         commit_details = {}
         for c in commits:
