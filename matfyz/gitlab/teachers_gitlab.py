@@ -3,6 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2020 Charles University
 
+"""
+Teachers GitLab for mass actions on GitLab
+
+Utilities to help you manage multiple repositories at once.
+Targets teachers that need to manage separate repository for each
+student and massively fork, clone or upload files to them.
+"""
+
 import argparse
 import csv
 import collections
@@ -21,18 +29,34 @@ import matfyz.gitlab.utils as mg
 _registered_commands = []
 
 def register_command(name):
+    """
+    Decorator for function representing an actual command.
+
+    :param name: Command name (as specified by the user).
+    """
+
     def decorator(func):
+        """
+        Actual decorator (because we ned to process arguments).
+        """
         _registered_commands.append({
             'name': name,
             'func': func
         })
         def wrapper(*args, **kwargs):
+            """
+            Wrapper calling the original function.
+            """
             return func(*args, **kwargs)
         return wrapper
     return decorator
 
 def get_registered_commands():
+    """
+    Return list of commands registers so far.
+    """
     return _registered_commands[:]
+
 
 class Parameter:
     """
@@ -97,7 +121,11 @@ class UserListParameter(Parameter):
         matching_users = glb.users.list(username=user_login)
         if len(matching_users) == 0:
             if self.mock_users:
+                # pylint: disable=too-few-public-methods
                 class UserMock:
+                    """
+                    Mock class when the login cannot be matched to actual user.
+                    """
                     def __init__(self, name):
                         self.username = name
                 return UserMock(user_login)
@@ -160,6 +188,9 @@ class ActionParameter(Parameter):
         return getattr(parsed_options, 'arg_' + argument_name)
 
 class CommandParser:
+    """
+    Wrapper for argparse for Teachers GitLab.
+    """
     def __init__(self):
         self.args_common = argparse.ArgumentParser(add_help=False)
         self.args_common.add_argument(
@@ -218,11 +249,7 @@ class CommandParser:
 
     def parse_args(self, argv):
         if len(argv) < 1:
-            # pylint: disable=too-few-public-methods
-            class HelpConfig:
-                def __init__(self):
-                    self.func = None
-            self.parsed_options = HelpConfig()
+            self.parsed_options = self.args.parse_args(['help'])
         else:
             self.parsed_options = self.args.parse_args(argv)
         return self.parsed_options
@@ -525,7 +552,7 @@ def action_get_file(
                 branch,
                 commit_filter
             )
-        except Exception:
+        except gitlab.exceptions.GitlabGetError:
             logger.error("No matching commit in %s", project.path_with_namespace)
             continue
 
@@ -909,11 +936,11 @@ def main():
 
     config = cli.parse_args(sys.argv[1:])
 
-    init_logging(logging.DEBUG if config.debug else logging.INFO)
-
     if config.func is None:
         cli.print_help()
         return
+
+    init_logging(logging.DEBUG if config.debug else logging.INFO)
 
     glb = cli.get_gitlab_instance()
     config.func(glb, config)

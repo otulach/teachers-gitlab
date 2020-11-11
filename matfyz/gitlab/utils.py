@@ -7,14 +7,14 @@ Helper GitLab functions.
 """
 
 import base64
-import dateparser
 import http
 import os
 import pathlib
-import pytz
 import subprocess
 import time
+import dateparser
 import gitlab
+import pytz
 
 
 def get_canonical_project(glb, project):
@@ -173,7 +173,7 @@ def get_commit_before_deadline(
     for commit in commits:
         if commit_filter(commit):
             return commit
-    raise Exception("No matching commit found.")
+    raise gitlab.exceptions.GitlabGetError("No matching commit found.")
 
 
 def clone_or_fetch(glb, project, local_path):
