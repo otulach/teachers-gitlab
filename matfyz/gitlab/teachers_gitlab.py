@@ -201,13 +201,13 @@ class CommandParser:
         for dest, param in callback_func.__annotations__.items():
             param.register(dest, parser)
 
-        def callback_wrapper(glb, cfg, callback):
+        def wrapper(glb, cfg, callback):
             kwargs = {}
             for dest, param in callback.__annotations__.items():
                 kwargs[dest] = param.get_value(dest, glb, cfg)
             callback(**kwargs)
 
-        parser.set_defaults(func=lambda glb, cfg: callback_wrapper(glb, cfg, callback_func))
+        parser.set_defaults(func=lambda glb, cfg: wrapper(glb, cfg, callback_func))
         parser.set_defaults(command_name_=name)
 
     def parse_args(self, argv):
@@ -356,8 +356,15 @@ def action_set_branch_protection(
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         branch = project.branches.get(branch_name)
-        logger.info("Protecting branch %s in %s", branch.name, project.path_with_namespace)
-        branch.protect(developers_can_push=developers_can_push, developers_can_merge=developers_can_merge)
+        logger.info(
+            "Protecting branch %s in %s",
+            branch.name,
+            project.path_with_namespace
+        )
+        branch.protect(
+            developers_can_push=developers_can_push,
+            developers_can_merge=developers_can_merge
+        )
 
 
 @register_command('unprotect')
@@ -384,7 +391,11 @@ def action_unprotect_branch(
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         branch = project.branches.get(branch_name)
-        logger.info("Unprotecting branch %s in %s", branch.name, project.path_with_namespace)
+        logger.info(
+            "Unprotecting branch %s in %s",
+            branch.name,
+            project.path_with_namespace
+        )
         branch.unprotect()
 
 
@@ -419,7 +430,12 @@ def action_add_member(
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         try:
-            logger.warning("Adding %s to %s (as %s)", user.username, project.path_with_namespace, level)
+            logger.info(
+                "Adding %s to %s (as %s)",
+                user.username,
+                project.path_with_namespace,
+                level
+            )
             project.members.create({
                 'user_id' : user.id,
                 'access_level' : level,
@@ -487,23 +503,33 @@ def action_get_file(
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
     if blacklist:
-        filter = lambda commit: not re.fullmatch (blacklist, commit.author_email)
+        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
     else:
-        filter = lambda commit: True
+        commit_filter = lambda commit: True
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         remote_file = remote_file_template.format(**user.row)
         local_file = local_file_template.format(**user.row)
 
         try:
-            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
+            last_commit = mg.get_commit_before_deadline(
+                glb,
+                project,
+                deadline,
+                branch,
+                commit_filter
+            )
         except Exception:
             logger.error("No matching commit in %s", project.path_with_namespace)
             continue
 
         current_content = mg.get_file_contents(glb, project, last_commit.id, remote_file)
         if current_content is None:
-            logger.error("File %s does not exist in %s", remote_file, project.path_with_namespace)
+            logger.error(
+                "File %s does not exist in %s",
+                remote_file,
+                project.path_with_namespace
+            )
         else:
             logger.info(
                 "File %s in %s has %dB.",
@@ -581,9 +607,21 @@ def action_put_file(
                 commit_needed = True
 
         if commit_needed:
-            logger.info("Uploading %s to %s as %s", from_file, project.path_with_namespace, to_file)
+            logger.info(
+                "Uploading %s to %s as %s",
+                from_file,
+                project.path_with_namespace,
+                to_file
+            )
             if not dry_run:
-                mg.put_file_overwriting(glb, project, branch, to_file, from_file_content, commit_message)
+                mg.put_file_overwriting(
+                    glb,
+                    project,
+                    branch,
+                    to_file,
+                    from_file_content,
+                    commit_message
+                )
         else:
             logger.info("No change in %s at %s.", from_file, project.path_with_namespace)
 
@@ -700,9 +738,9 @@ def action_clone(
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
     if blacklist:
-        filter = lambda commit: not re.fullmatch (blacklist, commit.author_email)
+        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
     else:
-        filter = lambda commit: True
+        commit_filter = lambda commit: True
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         project = mg.get_canonical_project(glb, project_template.format(**user.row))
@@ -711,7 +749,13 @@ def action_clone(
         if commit:
             last_commit = project.commits.get(commit.format(**user.row))
         else:
-            last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter)
+            last_commit = mg.get_commit_before_deadline(
+                glb,
+                project,
+                deadline,
+                branch,
+                commit_filter
+            )
         mg.clone_or_fetch(glb, project, local_path)
         mg.reset_to_commit(local_path, last_commit.id)
 
@@ -783,14 +827,21 @@ def action_deadline_commits(
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
     if blacklist:
-        filter = lambda commit: not re.fullmatch (blacklist, commit.author_email)
+        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
     else:
-        filter = lambda commit: True
+        commit_filter = lambda commit: True
 
     print(output_header, file=output)
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        last_commit = mg.get_commit_before_deadline(glb, project, deadline, branch, filter, prefer_tag)
+        last_commit = mg.get_commit_before_deadline(
+            glb,
+            project,
+            deadline,
+            branch,
+            commit_filter,
+            prefer_tag
+        )
         logger.debug("%s at %s", project.path_with_namespace, last_commit.id)
 
         line = output_template.format(commit=last_commit, **user.row)

@@ -25,7 +25,12 @@ def get_canonical_project(glb, project):
     raise Exception("Unexpected object type.")
 
 
-def retries(n=None, interval=2, timeout=None, message="Operation timed-out (too many retries)"):
+def retries(
+        n=None,
+        interval=2,
+        timeout=None,
+        message="Operation timed-out (too many retries)"
+    ):
     """
     To be used in for-loops to try action multiple times.
     Throws exception on time-out.
@@ -144,7 +149,14 @@ def get_commit_with_tag(glb, project, tag_name):
             return t.commit
     return None
 
-def get_commit_before_deadline(glb, project, deadline, branch, filter = lambda commit: True, tag=None):
+def get_commit_before_deadline(
+        glb,
+        project,
+        deadline,
+        branch,
+        commit_filter=lambda commit: True,
+        tag=None
+    ):
     project = get_canonical_project(glb, project)
     if tag:
         commit = get_commit_with_tag(glb, project, tag)
@@ -159,7 +171,7 @@ def get_commit_before_deadline(glb, project, deadline, branch, filter = lambda c
                 pass
     commits = project.commits.list(ref_name=branch, until=deadline)
     for commit in commits:
-        if filter(commit):
+        if commit_filter(commit):
             return commit
     raise Exception("No matching commit found.")
 
