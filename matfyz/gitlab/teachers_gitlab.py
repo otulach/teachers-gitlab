@@ -141,6 +141,7 @@ class UserListParameter(Parameter):
                     """
                     def __init__(self, name):
                         self.username = name
+                        self.is_mock = True
                 return UserMock(user_login)
             else:
                 return None
@@ -320,12 +321,33 @@ def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=T
 
 
 @register_command('accounts')
-def action_accounts(users: UserListParameter()):
+def action_accounts(
+        users: UserListParameter(False),
+        show_summary: ActionParameter(
+            'show-summary',
+            default=False,
+            action='store_true',
+            help='Show summary numbers.'
+        )
+    ):
     """
     List accounts that were not found.
     """
-    for _ in users:
-        pass
+    logger = logging.getLogger('gitlab-accounts')
+    users_total = 0
+    users_not_found = 0
+    for user in users:
+        users_total = users_total + 1
+        if hasattr(user, 'is_mock'):
+            logger.warning("User %s not found.", user.username)
+            users_not_found = users_not_found + 1
+            continue
+    if show_summary:
+        print('Total: {}, Not-found: {}, Ok: {}'.format(
+            users_total,
+            users_not_found,
+            users_total - users_not_found
+        ))
 
 
 @register_command('fork')
