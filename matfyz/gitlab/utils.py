@@ -111,7 +111,7 @@ def remove_fork_relationship(glb, project):
             raise
 
 
-def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_message):
+def put_file(glb, project, branch, file_path, file_contents, overwrite, commit_message):
     """
     Commit a file, overwriting existing content forcefully.
     """
@@ -132,8 +132,11 @@ def put_file_overwriting(glb, project, branch, file_path, file_contents, commit_
         return project.commits.create(commit_data)
     except gitlab.exceptions.GitlabCreateError as exp:
         if exp.response_code == http.HTTPStatus.BAD_REQUEST:
-            commit_data['actions'][0]['action'] = 'update'
-            return project.commits.create(commit_data)
+            if overwrite:
+                commit_data['actions'][0]['action'] = 'update'
+                return project.commits.create(commit_data)
+            else:
+                return None
         else:
             raise
 

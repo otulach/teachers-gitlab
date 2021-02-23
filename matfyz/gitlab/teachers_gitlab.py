@@ -662,11 +662,21 @@ def action_put_file(
             default=False,
             action='store_true',
             help='Do not check current file content, always upload.'
+        ),
+        only_once: ActionParameter(
+            'once',
+            default=False,
+            action='store_true',
+            help='Upload file only if it is not present.'
         )
     ):
     """
     Upload file to multiple repositories.
     """
+
+    if only_once and force_commit:
+        logger.error("--force-commit and --once together does not make sense, aborting.")
+        return
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         from_file = from_file_template.format(**user.row)
@@ -679,27 +689,37 @@ def action_put_file(
         from_file_content = pathlib.Path(from_file).read_text()
 
         commit_needed = force_commit
+        already_exists = False
         if not force_commit:
             current_content = mg.get_file_contents(glb, project, branch, to_file)
-            if current_content:
+            already_exists = current_content is not None
+            if already_exists:
                 commit_needed = current_content != from_file_content.encode('utf-8')
             else:
                 commit_needed = True
 
         if commit_needed:
-            logger.info(
-                "Uploading %s to %s as %s",
-                from_file,
-                project.path_with_namespace,
-                to_file
-            )
+            if already_exists and only_once:
+                logger.info(
+                    "Not overwriting %s at %s.",
+                    from_file,
+                    project.path_with_namespace
+                )
+            else:
+                logger.info(
+                    "Uploading %s to %s as %s",
+                    from_file,
+                    project.path_with_namespace,
+                    to_file
+                )
             if not dry_run:
-                mg.put_file_overwriting(
+                mg.put_file(
                     glb,
                     project,
                     branch,
                     to_file,
                     from_file_content,
+                    not only_once,
                     commit_message
                 )
         else:
