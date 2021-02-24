@@ -495,6 +495,7 @@ def action_add_member(
             'access-level',
             required=True,
             metavar='LEVEL',
+            choices=['guest', 'devel', 'developer', 'reporter', 'maintainer'],
             help='Access level: devel or reporter.'
         )
     ):
@@ -502,10 +503,14 @@ def action_add_member(
     Add members to multiple projects.
     """
 
-    if access_level == 'devel':
-        level = gitlab.DEVELOPER_ACCESS
+    if access_level == 'guest':
+        level = gitlab.GUEST_ACCESS
     elif access_level == 'reporter':
         level = gitlab.REPORTER_ACCESS
+    elif (access_level == 'devel') or (access_level == 'developer'):
+        level = gitlab.DEVELOPER_ACCESS
+    elif access_level == 'maintainer':
+        level = gitlab.MAINTAINER_ACCESS
     else:
         raise Exception("Unsupported access level.")
 
