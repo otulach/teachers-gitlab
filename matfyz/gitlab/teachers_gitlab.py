@@ -484,6 +484,7 @@ def action_add_member(
         glb: GitlabInstanceParameter(),
         logger: LoggerParameter(),
         users: UserListParameter(),
+        dry_run: DryRunParameter(),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -516,10 +517,11 @@ def action_add_member(
                 project.path_with_namespace,
                 level
             )
-            project.members.create({
-                'user_id' : user.id,
-                'access_level' : level,
-            })
+            if not dry_run:
+                project.members.create({
+                    'user_id' : user.id,
+                    'access_level' : level,
+                })
         except gitlab.GitlabCreateError as exp:
             if exp.response_code == http.HTTPStatus.CONFLICT:
                 pass
