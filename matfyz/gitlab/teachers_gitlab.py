@@ -354,7 +354,7 @@ def action_accounts(
 def action_fork(
         glb: GitlabInstanceParameter(),
         logger: LoggerParameter(),
-        users: UserListParameter(),
+        users: UserListParameter(False),
         from_project: ActionParameter(
             'from',
             required=True,
@@ -372,6 +372,12 @@ def action_fork(
             default=False,
             action='store_true',
             help='Hide fork relationship.'
+        ),
+        include_nonexistent: ActionParameter(
+            'include-invalid-users',
+            default=False,
+            action='store_true',
+            help='For even for invalid (e.g. not found) users.'
         )
     ):
     """
@@ -381,6 +387,11 @@ def action_fork(
     from_project = mg.get_canonical_project(glb, from_project)
 
     for user in users:
+        if hasattr(user, 'is_mock'):
+            logger.warning("User %s not found.", user.username)
+            if not include_nonexistent:
+                continue
+
         to_full_path = to_project_template.format(**user.row)
         to_namespace = os.path.dirname(to_full_path)
         to_name = os.path.basename(to_full_path)
