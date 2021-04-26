@@ -681,6 +681,12 @@ def action_put_file(
             action='store_true',
             help='Do not check current file content, always upload.'
         ),
+        skip_missing_file: ActionParameter(
+            'skip-missing-files',
+            default=False,
+            action='store_true',
+            help='Do not fail when file-to-be-uploaded is missing.'
+        ),
         only_once: ActionParameter(
             'once',
             default=False,
@@ -704,7 +710,14 @@ def action_put_file(
         }
         commit_message = commit_message_template.format(GL=extras, **user.row)
 
-        from_file_content = pathlib.Path(from_file).read_text()
+        try:
+            from_file_content = pathlib.Path(from_file).read_text()
+        except FileNotFoundError as e:
+            if skip_missing_file:
+                logger.error("Skipping %s as %s is missing.", project.path_with_namespace, from_file)
+                continue
+            else:
+                raise
 
         commit_needed = force_commit
         already_exists = False
