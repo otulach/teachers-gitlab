@@ -179,6 +179,18 @@ Get status of last pipeline as JSON.
     --summary-only
 ```
 
+## `get-pipeline-at-commit`
+
+Get status of the first non-skipped pipeline at or prior to specified commit as JSON.
+
+```shell
+./teachers_gitlab.sh get-pipeline-at-commit \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2021-summer/student-{login}" \
+    --commits "grading/results/commits.13.csv"
+```
+
 ## `commit-stats`
 
 Overview of all commits, including line statistics, as JSON.
