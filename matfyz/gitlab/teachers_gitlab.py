@@ -817,6 +817,78 @@ def action_get_last_pipeline(
     else:
         print(json.dumps(result, indent=4))
 
+@register_command('get-pipeline-at-commit')
+def action_get_pipeline_at_commit(
+        glb: GitlabInstanceParameter(),
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, formatted from CSV columns.'
+        ),
+        commits_file: ActionParameter(
+            'commits',
+            required=True,
+            metavar='COMMITS.csv',
+            help='CSV file with commit hashes'
+        )
+    ):
+    """
+    Get pipeline status of multiple projects at or prior to specified commit, ignoring skipped pipelines.
+    """
+
+    commits = {}
+    with open(commits_file) as cf:
+        reader = csv.reader(cf)
+        next(reader)
+        for _, commit, login in reader:
+            commits[login] = commit
+
+    result = {}
+    for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
+        pipelines = project.pipelines.list()
+        if len(pipelines) == 0:
+            result[project.path_with_namespace] = {
+                "status": "none"
+            }
+            continue
+
+        found_commit = False
+        found_pipeline = None
+
+        for pipeline in pipelines:
+            if pipeline.sha == commits[user.username]:
+                found_commit = True
+            if not found_commit:
+                continue
+
+            if pipeline.status != "skipped":
+                found_pipeline = pipeline
+                break
+
+        if found_pipeline is None:
+            result[project.path_with_namespace] = {
+                "status": "none"
+            }
+        else:
+            entry = {
+                "status": found_pipeline.status,
+                "id": found_pipeline.id,
+                "commit": found_pipeline.sha,
+                "jobs": [],
+            }
+
+            for job in found_pipeline.jobs.list():
+                entry["jobs"].append({
+                    "status": job.status,
+                    "id": job.id,
+                    "name": job.name,
+                })
+
+            result[project.path_with_namespace] = entry
+
+    print(json.dumps(result, indent=4))
 
 @register_command('clone')
 def action_clone(
