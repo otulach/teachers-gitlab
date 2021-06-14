@@ -8,8 +8,10 @@ Helper GitLab functions.
 
 import base64
 import http
+import logging
 import os
 import pathlib
+import requests
 import subprocess
 import time
 import dateparser
@@ -40,6 +42,37 @@ def retries(
         yield n
         time.sleep(interval)
     raise Exception(message)
+
+def retry_on_exception(message, exceptions):
+    """
+    Decorator for function that should be retried on some kind of exception.
+    """
+
+    def decorator(func):
+        """
+        Actual decorator (because we ned to process arguments).
+        """
+        def wrapper(*args, **kwargs):
+            """
+            Wrapper calling the original function.
+            """
+            logger = logging.getLogger('retry_on_exception')
+            last_ex = None
+            for i in retries(6):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as ex:
+                    for allowed in exceptions:
+                        if isinstance(ex, allowed):
+                            last_ex = ex
+                            logger.warning(message)
+                            continue
+                    if not last_ex:
+                        raise ex
+                    time.sleep(3)
+            raise last_ex
+        return wrapper
+    return decorator
 
 
 def get_canonical_project(glb, project):
@@ -109,7 +142,7 @@ def remove_fork_relationship(glb, project):
         else:
             raise
 
-
+@retry_on_exception('Failed to put file, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout])
 def put_file(glb, project, branch, file_path, file_contents, overwrite, commit_message):
     """
     Commit a file, overwriting existing content forcefully.
