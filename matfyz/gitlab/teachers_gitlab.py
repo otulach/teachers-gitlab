@@ -871,15 +871,15 @@ def action_get_pipeline_at_commit(
                 "status": found_pipeline.status,
                 "id": found_pipeline.id,
                 "commit": found_pipeline.sha,
-                "jobs": [],
+                "jobs": [
+                    {
+                        "status": job.status,
+                        "id": job.id,
+                        "name": job.name,
+                    }
+                    for job in found_pipeline.jobs.list()
+                ],
             }
-
-            for job in found_pipeline.jobs.list():
-                entry["jobs"].append({
-                    "status": job.status,
-                    "id": job.id,
-                    "name": job.name,
-                })
 
             result[project.path_with_namespace] = entry
 
