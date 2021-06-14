@@ -817,6 +817,73 @@ def action_get_last_pipeline(
     else:
         print(json.dumps(result, indent=4))
 
+@register_command('get-pipeline-at-commit')
+def action_get_pipeline_at_commit(
+        glb: GitlabInstanceParameter(),
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, formatted from CSV columns.'
+        ),
+        commit: ActionParameter(
+            'commit',
+            default=None,
+            metavar='COMMIT_WITH_FORMAT',
+            help='Commit to read pipeline status at.'
+        ),
+    ):
+    """
+    Get pipeline status of multiple projects at or prior to specified commit, ignoring skipped pipelines.
+    """
+
+    result = {}
+    for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
+        pipelines = project.pipelines.list()
+
+        if commit:
+            commit_sha = commit.format(**user.row)
+        else:
+            commit_sha = None
+
+        found_commit = False
+        found_pipeline = None
+
+        for pipeline in pipelines:
+            if not commit_sha:
+                found_commit = True
+            elif pipeline.sha == commit_sha:
+                found_commit = True
+            if not found_commit:
+                continue
+
+            if pipeline.status != "skipped":
+                found_pipeline = pipeline
+                break
+
+        if not found_pipeline:
+            entry = {
+                "status": "none"
+            }
+        else:
+            entry = {
+                "status": found_pipeline.status,
+                "id": found_pipeline.id,
+                "commit": found_pipeline.sha,
+                "jobs": [
+                    {
+                        "status": job.status,
+                        "id": job.id,
+                        "name": job.name,
+                    }
+                    for job in found_pipeline.jobs.list()
+                ],
+            }
+
+        result[project.path_with_namespace] = entry
+
+    print(json.dumps(result, indent=4))
 
 @register_command('clone')
 def action_clone(
