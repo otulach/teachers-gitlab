@@ -862,7 +862,7 @@ def action_get_pipeline_at_commit(
                 found_pipeline = pipeline
                 break
 
-        if found_pipeline is None:
+        if not found_pipeline:
             result[project.path_with_namespace] = {
                 "status": "none"
             }
