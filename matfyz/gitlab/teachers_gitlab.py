@@ -863,7 +863,7 @@ def action_get_pipeline_at_commit(
                 break
 
         if not found_pipeline:
-            result[project.path_with_namespace] = {
+            entry = {
                 "status": "none"
             }
         else:
@@ -881,7 +881,7 @@ def action_get_pipeline_at_commit(
                 ],
             }
 
-            result[project.path_with_namespace] = entry
+        result[project.path_with_namespace] = entry
 
     print(json.dumps(result, indent=4))
 
