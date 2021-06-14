@@ -16,21 +16,6 @@ import dateparser
 import gitlab
 import pytz
 
-
-def get_canonical_project(glb, project):
-    """
-    Ensure we have instance of gitlab...Project.
-
-    :param project: Either object already or path or project id.
-    """
-
-    if isinstance(project, (int, str)):
-        return glb.projects.get(project)
-    if isinstance(project, gitlab.v4.objects.Project):
-        return project
-    raise Exception("Unexpected object type.")
-
-
 def retries(
         n=None,
         interval=2,
@@ -55,6 +40,20 @@ def retries(
         yield n
         time.sleep(interval)
     raise Exception(message)
+
+
+def get_canonical_project(glb, project):
+    """
+    Ensure we have instance of gitlab...Project.
+
+    :param project: Either object already or path or project id.
+    """
+
+    if isinstance(project, (int, str)):
+        return glb.projects.get(project)
+    if isinstance(project, gitlab.v4.objects.Project):
+        return project
+    raise Exception("Unexpected object type.")
 
 
 def wait_for_project_to_be_forked(glb, project_path, timeout=None):
