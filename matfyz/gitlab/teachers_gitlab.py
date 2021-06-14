@@ -841,11 +841,7 @@ def action_get_pipeline_at_commit(
     result = {}
     for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
         pipelines = project.pipelines.list()
-        if len(pipelines) == 0:
-            result[project.path_with_namespace] = {
-                "status": "none"
-            }
-            continue
+
         if commit:
             commit_sha = commit.format(**user.row)
         else:
