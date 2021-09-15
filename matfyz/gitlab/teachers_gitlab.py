@@ -490,6 +490,34 @@ def action_unprotect_branch(
         branch.unprotect()
 
 
+@register_command('get-members')
+def action_members(
+        glb: GitlabInstanceParameter(),
+        project: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH',
+            help='Project path.'
+        ),
+        inherited: ActionParameter(
+            'inherited',
+            default=False,
+            action='store_true',
+            help='Show inherited members.'
+        )
+    ):
+    """
+    Get members of a project.
+    """
+
+    project = mg.get_canonical_project(glb, project)
+
+    print ('login,name')
+    members = project.members_all if inherited else project.members
+    for member in members.list (all = True):
+        print (f'{member.username},{member.name}')
+
+
 @register_command('add-member')
 def action_add_member(
         glb: GitlabInstanceParameter(),
