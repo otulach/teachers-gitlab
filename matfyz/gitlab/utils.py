@@ -74,7 +74,7 @@ def retry_on_exception(message, exceptions):
         return wrapper
     return decorator
 
-
+@retry_on_exception('Failed to canonicalize a project, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
 def get_canonical_project(glb, project):
     """
     Ensure we have instance of gitlab...Project.
@@ -142,7 +142,7 @@ def remove_fork_relationship(glb, project):
         else:
             raise
 
-@retry_on_exception('Failed to put file, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout])
+@retry_on_exception('Failed to put file, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
 def put_file(glb, project, branch, file_path, file_contents, overwrite, commit_message):
     """
     Commit a file, overwriting existing content forcefully.
@@ -172,7 +172,7 @@ def put_file(glb, project, branch, file_path, file_contents, overwrite, commit_m
         else:
             raise
 
-
+@retry_on_exception('Failed to read file, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
 def get_file_contents(glb, project, branch, file_path):
     """
     Retrieve current file contents on a GitLab repository.
