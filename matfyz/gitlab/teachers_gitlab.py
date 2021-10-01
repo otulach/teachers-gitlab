@@ -458,6 +458,67 @@ def action_set_branch_protection(
         )
 
 
+@register_command('protect-tag')
+def action_set_tag_protection(
+        glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, formatted from CSV columns.'
+        ),
+        tag_name: ActionParameter(
+            'tag',
+            required=True,
+            metavar='GIT_TAG',
+            help='Git tag name to set protection on.'
+        ),
+        developers_can_create: ActionParameter(
+            'developers-can-create',
+            default=False,
+            action='store_true',
+            help='Allow developers to create this tag.'
+        ),
+        maintainers_can_create: ActionParameter(
+            'maintainers-can-create',
+            default=False,
+            action='store_true',
+            help='Allow maintainers to create this tag.'
+        ),
+    ):
+    """
+    Set tag protection on multiple projects.
+    """
+
+    access_level = gitlab.NO_ACCESS
+    if developers_can_create:
+        access_level = gitlab.DEVELOPER_ACCESS
+    if maintainers_can_create:
+        access_level = gitlab.MAINTAINER_ACCESS
+
+    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+        logger.info(
+            "Protecting tag %s in %s",
+            tag_name,
+            project.path_with_namespace
+        )
+        try:
+            existing = project.protectedtags.get(tag_name)
+            existing_level = existing.create_access_levels[0]['access_level']
+            if existing_level == access_level:
+                logger.debug("Skipping as it is already set.")
+                continue
+            logger.warning(" - Need to delete existing (access %d => %d) one first.", existing_level, access_level)
+            existing.delete()
+        except gitlab.exceptions.GitlabGetError:
+            pass
+        project.protectedtags.create({
+            'name': tag_name,
+            'create_access_level': access_level
+        })
+
 @register_command('unprotect')
 def action_unprotect_branch(
         glb: GitlabInstanceParameter(),
