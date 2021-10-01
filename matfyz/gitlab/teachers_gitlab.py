@@ -550,6 +550,60 @@ def action_unprotect_branch(
         )
         branch.unprotect()
 
+@register_command('create-tag')
+def action_create_tag(
+        glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
+        users: UserListParameter(),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, formatted from CSV columns.'
+        ),
+        tag_name: ActionParameter(
+            'tag',
+            required=True,
+            metavar='TAG_NAME',
+            help='Git tag name.'
+        ),
+        ref_name: ActionParameter(
+            'ref',
+            required=True,
+            metavar='GIT_BRANCH_OR_COMMIT',
+            help='Git branch name (tip) or commit to tag.'
+        ),
+        commit_message_template: ActionParameter(
+            'message',
+            default=None,
+            metavar='COMMIT_MESSAGE_WITH_FORMAT',
+            help='Commit message, formatted from CSV columns.'
+        ),
+    ):
+    """
+    Create a tag on a given commit or branch tip.
+    """
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        params = {
+            'tag_name': tag_name,
+            'ref': ref_name
+        }
+
+        if commit_message_template:
+            extras = {
+                'tag': tag_name,
+            }
+            params['message'] = commit_message_template.format(GL=extras, **user.row)
+
+        logger.info("Creating tag %s on %s in %s", tag_name, ref_name, project.path_with_namespace)
+        try:
+            project.tags.create(params)
+        except gitlab.exceptions.GitlabCreateError as exp:
+            if (exp.response_code == http.HTTPStatus.BAD_REQUEST) and exp.error_message.endswith("already exists"):
+                pass
+            else:
+                raise
 
 @register_command('get-members')
 def action_members(
