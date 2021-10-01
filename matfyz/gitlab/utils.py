@@ -65,7 +65,10 @@ def retry_on_exception(message, exceptions):
                     for allowed in exceptions:
                         if isinstance(ex, allowed):
                             last_ex = ex
-                            logger.warning(message)
+                            if '%s' in message:
+                                logger.warning(message, ex)
+                            else:
+                                logger.warning(message)
                             continue
                     if not last_ex:
                         raise ex
