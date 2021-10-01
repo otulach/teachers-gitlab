@@ -573,10 +573,10 @@ def action_members(
 
     project = mg.get_canonical_project(glb, project)
 
-    print ('login,name')
+    print('login,name')
     members = project.members_all if inherited else project.members
     for member in members.list (all = True):
-        print (f'{member.username},{member.name}')
+        print('{},{}'.format(member.username, member.name))
 
 
 @register_command('add-member')
