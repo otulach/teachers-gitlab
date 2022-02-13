@@ -1,4 +1,4 @@
 dateparser
-python-gitlab
+python-gitlab==2.10.1
 pytz
 setuptools
