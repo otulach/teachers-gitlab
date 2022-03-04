@@ -598,7 +598,7 @@ def action_create_tag(
 
         logger.info("Creating tag %s on %s in %s", tag_name, ref_name, project.path_with_namespace)
         try:
-            project.tags.create(params)
+            mg.create_tag(glb, project, params)
         except gitlab.exceptions.GitlabCreateError as exp:
             if (exp.response_code == http.HTTPStatus.BAD_REQUEST) and exp.error_message.endswith("already exists"):
                 pass

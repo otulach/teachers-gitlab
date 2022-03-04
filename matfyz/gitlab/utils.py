@@ -145,6 +145,12 @@ def remove_fork_relationship(glb, project):
         else:
             raise
 
+@retry_on_exception('Failed to create tag, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
+def create_tag(glb, project, tag_params):
+    project = get_canonical_project(glb, project)
+    project.tags.create(tag_params)
+
+
 @retry_on_exception('Failed to put file, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
 def put_file(glb, project, branch, file_path, file_contents, overwrite, commit_message):
     """
