@@ -58,7 +58,7 @@ def retry_on_exception(message, exceptions):
             """
             logger = logging.getLogger('retry_on_exception')
             last_ex = None
-            for i in retries(6):
+            for i in retries(6, timeout=240):
                 try:
                     return func(*args, **kwargs)
                 except Exception as ex:
@@ -72,7 +72,7 @@ def retry_on_exception(message, exceptions):
                             continue
                     if not last_ex:
                         raise ex
-                    time.sleep(3)
+                    time.sleep(1)
             raise last_ex
         return wrapper
     return decorator
@@ -101,7 +101,7 @@ def wait_for_project_to_be_forked(glb, project_path, timeout=None):
 
     # In 10 minutes, even Torvalds' Linux repository is forked
     # on a not-that-fast instance :-)
-    for _ in retries(120, 5, timeout):
+    for _ in retries(360, 2, timeout):
         if not project.empty_repo:
             return
         # Force refresh (why project.refresh() does not work?)
