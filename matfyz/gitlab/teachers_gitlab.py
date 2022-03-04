@@ -415,7 +415,7 @@ def action_fork(
 def action_set_branch_protection(
         glb: GitlabInstanceParameter(),
         logger: LoggerParameter(),
-        users: UserListParameter(),
+        users: UserListParameter(False),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -462,7 +462,7 @@ def action_set_branch_protection(
 def action_set_tag_protection(
         glb: GitlabInstanceParameter(),
         logger: LoggerParameter(),
-        users: UserListParameter(),
+        users: UserListParameter(False),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -554,7 +554,7 @@ def action_unprotect_branch(
 def action_create_tag(
         glb: GitlabInstanceParameter(),
         logger: LoggerParameter(),
-        users: UserListParameter(),
+        users: UserListParameter(False),
         project_template: ActionParameter(
             'project',
             required=True,
@@ -786,7 +786,7 @@ def action_get_file(
 def action_put_file(
         glb: GitlabInstanceParameter(),
         logger: LoggerParameter(),
-        users: UserListParameter(),
+        users: UserListParameter(False),
         dry_run: DryRunParameter(),
         project_template: ActionParameter(
             'project',
