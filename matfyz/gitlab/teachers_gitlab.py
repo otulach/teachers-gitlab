@@ -567,10 +567,10 @@ def action_create_tag(
             metavar='TAG_NAME',
             help='Git tag name.'
         ),
-        ref_name: ActionParameter(
+        ref_name_template: ActionParameter(
             'ref',
             required=True,
-            metavar='GIT_BRANCH_OR_COMMIT',
+            metavar='GIT_BRANCH_OR_COMMIT_WITH_TEMPLATE',
             help='Git branch name (tip) or commit to tag.'
         ),
         commit_message_template: ActionParameter(
@@ -585,9 +585,10 @@ def action_create_tag(
     """
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        ref_name = ref_name_template.format(**user.row)
         params = {
             'tag_name': tag_name,
-            'ref': ref_name
+            'ref': ref_name,
         }
 
         if commit_message_template:
@@ -1105,23 +1106,23 @@ def action_clone(
 def action_deadline_commits(
         glb: GitlabInstanceParameter(),
         logger: LoggerParameter(),
-        users: UserListParameter(),
+        users: UserListParameter(False),
         project_template: ActionParameter(
             'project',
             required=True,
             metavar='PROJECT_PATH_WITH_FORMAT',
             help='Project path, formatted from CSV columns.'
         ),
-        branch: ActionParameter(
+        branch_template: ActionParameter(
             'branch',
             default='master',
-            metavar='BRANCH',
+            metavar='BRANCH_WITH_FORMAT',
             help='Branch name, defaults to master.'
         ),
-        prefer_tag: ActionParameter(
+        prefer_tag_template: ActionParameter(
             'prefer-tag',
             default=None,
-            metavar='TAG',
+            metavar='TAG_WITH_FORMAT',
             help='Prefer commit with this tag (but also before deadline).'
         ),
         deadline: ActionParameter(
@@ -1175,14 +1176,22 @@ def action_deadline_commits(
     print(output_header, file=output)
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        last_commit = mg.get_commit_before_deadline(
-            glb,
-            project,
-            deadline,
-            branch,
-            commit_filter,
-            prefer_tag
-        )
+        prefer_tag = prefer_tag_template.format(**user.row) if prefer_tag_template else None
+        branch = branch_template.format(**user.row)
+        try:
+            last_commit = mg.get_commit_before_deadline(
+                glb,
+                project,
+                deadline,
+                branch,
+                commit_filter,
+                prefer_tag
+            )
+        except gitlab.exceptions.GitlabGetError:
+            class CommitMock:
+                def __init__(self, commit_id):
+                    self.id = commit_id
+            last_commit = CommitMock('0000000000000000000000000000000000000000')
         logger.debug("%s at %s", project.path_with_namespace, last_commit.id)
 
         line = output_template.format(commit=last_commit, **user.row)
