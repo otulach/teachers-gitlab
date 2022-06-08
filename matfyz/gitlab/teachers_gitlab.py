@@ -519,6 +519,40 @@ def action_set_tag_protection(
             'create_access_level': access_level
         })
 
+@register_command('unprotect-tag')
+def action_unset_tag_protection(
+        glb: GitlabInstanceParameter(),
+        logger: LoggerParameter(),
+        users: UserListParameter(False),
+        project_template: ActionParameter(
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, formatted from CSV columns.'
+        ),
+        tag_name: ActionParameter(
+            'tag',
+            required=True,
+            metavar='GIT_TAG',
+            help='Git tag name to set protection on.'
+        ),
+    ):
+    """
+    Unset tag protection on multiple projects.
+    """
+
+    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+        logger.info(
+            "Unprotecting tag %s in %s",
+            tag_name,
+            project.path_with_namespace
+        )
+        try:
+            existing = project.protectedtags.get(tag_name)
+            existing.delete()
+        except gitlab.exceptions.GitlabGetError:
+            logger.debug("Skipping as it is not protected.")
+
 @register_command('unprotect')
 def action_unprotect_branch(
         glb: GitlabInstanceParameter(),
