@@ -534,7 +534,7 @@ def action_unset_tag_protection(
             'tag',
             required=True,
             metavar='GIT_TAG',
-            help='Git tag name to set protection on.'
+            help='Git tag name to unset protection on.'
         ),
     ):
     """
