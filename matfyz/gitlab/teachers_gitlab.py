@@ -411,6 +411,24 @@ def action_accounts(
         ))
 
 
+def get_regex_blacklist_filter(blacklist_re, func):
+    def accept_all():
+        return True
+
+    def reject_blacklist_matches(obj):
+        return not blacklist_pattern.fullmatch(func(obj))
+
+    if blacklist_re:
+        blacklist_pattern = re.compile(blacklist_re)
+        return reject_blacklist_matches
+    else:
+        return accept_all
+
+
+def get_commit_author_email_filter(blacklist):
+    return get_regex_blacklist_filter(blacklist, lambda commit: commit.author_email)
+
+
 @register_command('clone')
 def action_clone(
     glb: GitlabInstanceParameter(),
@@ -461,11 +479,7 @@ def action_clone(
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
-
+    commit_filter = get_commit_author_email_filter(blacklist)
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         project = mg.get_canonical_project(glb, project_template.format(**user.row))
         local_path = local_path_template.format(**user.row)
@@ -1005,11 +1019,7 @@ def action_get_file(
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
-
+    commit_filter = get_commit_author_email_filter(blacklist)
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         remote_file = remote_file_template.format(**user.row)
         local_file = local_file_template.format(**user.row)
@@ -1358,10 +1368,7 @@ def action_deadline_commits(
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
+    commit_filter = get_commit_author_email_filter(blacklist)
 
     print(output_header, file=output)
 
