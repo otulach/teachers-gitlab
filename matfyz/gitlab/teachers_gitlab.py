@@ -475,7 +475,7 @@ def action_fork(
     )
 ):
     """
-    Fork one repo multiple times.
+    Fork one repository multiple times.
     """
 
     from_project = mg.get_canonical_project(glb, from_project)
