@@ -867,6 +867,47 @@ def action_add_member(
                 )
 
 
+@register_command('remove-member')
+def action_remove_member(
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(),
+    dry_run: DryRunParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    )
+):
+    """
+    Remove members from multiple projects.
+    """
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        project_path = project.path_with_namespace
+
+        try:
+            member = project.members.get(user.id)
+            access_level = gitlab.const.AccessLevel(member.access_level)
+            logger.info(
+                "Removing %s (%s) from %s",
+                user.username, access_level.name, project_path
+            )
+
+            if not dry_run:
+                try:
+                    member.delete()
+                except gitlab.GitlabDeleteError as exp:
+                    logger.warning(
+                        "Failed to remove %s (%s) from %s: %s",
+                        user.username, access_level.name, project_path, exp
+                    )
+
+        except gitlab.GitlabGetError:
+            logger.warning("Member %s not found in %s", user.username, project_path)
+
+
 @register_command('get-file')
 def action_get_file(
     glb: GitlabInstanceParameter(),
