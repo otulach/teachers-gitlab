@@ -562,17 +562,15 @@ def action_protect_branch(
         metavar='GIT_BRANCH',
         help='Git branch name to set protection on.'
     ),
-    developers_can_merge: ActionParameter(
-        'developers-can-merge',
-        default=False,
-        action='store_true',
-        help='Allow developers to merge into this branch.'
+    merge_access_level: AccessLevelActionParameter(
+        'merge-access-level',
+        default=gitlab.const.AccessLevel.DEVELOPER,
+        help="Set access level required to merge into this branch. Defaults to 'DEVELOPER'."
     ),
-    developers_can_push: ActionParameter(
-        'developers-can-push',
-        default=False,
-        action='store_true',
-        help='Allow developers to merge into this branch.'
+    push_access_level: AccessLevelActionParameter(
+        'push-access-level',
+        default=gitlab.const.AccessLevel.MAINTAINER,
+        help="Set access level required to push into this branch. Defaults to 'MAINTAINER'."
     )
 ):
     """
@@ -580,16 +578,55 @@ def action_protect_branch(
     """
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        branch = project.branches.get(branch_name)
         logger.info(
-            "Protecting branch %s in %s",
-            branch.name,
-            project.path_with_namespace
+            "Protecting branch '%s' in %s",
+            branch_name, project.path_with_namespace
         )
-        branch.protect(
-            developers_can_push=developers_can_push,
-            developers_can_merge=developers_can_merge
+
+        gitlab_protect_branch(
+            logger, project, branch_name,
+            merge_access_level, push_access_level
         )
+
+
+def gitlab_protect_branch(
+    logger, project, branch_name, merge_access_level, push_access_level
+):
+    def branch_get_merge_access_level(branch):
+        return gitlab_extract_access_level(branch, 'merge_access_levels')
+
+    def branch_get_push_access_level(branch):
+        return gitlab_extract_access_level(branch, 'push_access_levels')
+
+    # Protected branches cannot be modified and saved (they lack SaveMixin).
+    # They need to be deleted and created anew.
+    try:
+        protected_branch = project.protectedbranches.get(branch_name)
+        existing_merge_level = branch_get_merge_access_level(protected_branch)
+        existing_push_level = branch_get_push_access_level(protected_branch)
+        if existing_merge_level == merge_access_level and existing_push_level == push_access_level:
+            logger.debug(
+                " - Skipping, already requires '%s/%s' merge/push access.",
+                merge_access_level.name, push_access_level.name
+            )
+            return
+
+        logger.warning(
+            " - Recreating to change '%s/%s' merge/push access to '%s/%s'.",
+            existing_merge_level.name, existing_push_level.name,
+            merge_access_level.name, push_access_level.name
+        )
+        protected_branch.delete()
+
+    except gitlab.exceptions.GitlabGetError:
+        # There is no such protected branch.
+        pass
+
+    project.protectedbranches.create({
+        'name': branch_name,
+        'merge_access_level': merge_access_level,
+        'push_access_level': push_access_level
+    })
 
 
 @register_command('unprotect')
