@@ -40,7 +40,7 @@ def register_command(name):
 
     def decorator(func):
         """
-        Actual decorator (because we ned to process arguments).
+        Actual decorator (because we need to process arguments).
         """
         _registered_commands.append({
             'name': name,
@@ -78,6 +78,7 @@ class Parameter:
         Callback to add itself to the argparse subparser.
 
         :param argument_name: Used for dest in argparse.
+        :param subparser: Parser to register arguments with.
         """
 
     def get_value(self, argument_name, glb, parsed_options):
@@ -995,7 +996,7 @@ def action_put_file(
 
         try:
             from_file_content = pathlib.Path(from_file).read_text()
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             if skip_missing_file:
                 logger.error("Skipping %s as %s is missing.", project.path_with_namespace, from_file)
                 continue
