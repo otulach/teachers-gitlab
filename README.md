@@ -16,7 +16,8 @@ pip install -r requirements.txt
 
 This will give you `teachers_gitlab` on your `$PATH`. You can also
 use `virtualenv` to test locally or use the provided shell script
-wrapper (as used in the examples).
+wrapper (as used in the examples) which sets up a virtual
+environment automatically.
 
 ## Configuration
 
@@ -97,8 +98,8 @@ step but allows developers to push and merge
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
     --branch master \
-    --developers-can-merge \
-    --developers-can-push
+    --merge-access-level developer \
+    --push-access-level developer
 ```
 
 ## `add-member`
@@ -112,7 +113,7 @@ Adding users to their repositories from the example above is done with
     --config-file config.ini \
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
-    --access-level devel
+    --access-level developer
 ```
 
 ## `clone`
