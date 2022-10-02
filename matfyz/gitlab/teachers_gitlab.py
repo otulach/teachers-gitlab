@@ -697,58 +697,59 @@ def action_protect_tag(
         metavar='GIT_TAG',
         help='Git tag name to set protection on.'
     ),
-    developers_can_create: ActionParameter(
-        'developers-can-create',
-        default=False,
-        action='store_true',
-        help='Allow developers to create this tag.'
-    ),
-    maintainers_can_create: ActionParameter(
-        'maintainers-can-create',
-        default=False,
-        action='store_true',
-        help='Allow maintainers to create this tag.'
-    ),
+    create_access_level: AccessLevelActionParameter(
+        'create-access-level',
+        default=gitlab.const.AccessLevel.MAINTAINER,
+        help="Set access level required to create this tag. Defaults to 'MAINTAINER'."
+    )
 ):
     """
     Set tag protection on multiple projects.
     """
-
-    create_access_level = gitlab.NO_ACCESS
-    if developers_can_create:
-        create_access_level = gitlab.DEVELOPER_ACCESS
-    if maintainers_can_create:
-        create_access_level = gitlab.MAINTAINER_ACCESS
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         logger.info(
             "Protecting tag '%s' in %s",
             tag_name, project.path_with_namespace
         )
+        gitlab_protect_tag(
+            logger, project, tag_name,
+            create_access_level
+        )
 
-        # Protected tags cannot be modified and saved (they lack SaveMixin).
-        # They need to be deleted and created anew.
-        try:
-            protected_tag = project.protectedtags.get(tag_name)
-            existing_create_level = protected_tag.create_access_levels[0]['access_level']
-            if existing_create_level == create_access_level:
-                logger.debug("Skipping as it is already set.")
-                continue
 
-            logger.warning(
-                " - Need to delete existing (access %d => %d) one first.",
-                existing_create_level, create_access_level
+def gitlab_protect_tag(
+    logger, project, tag_name, create_access_level
+):
+    def tag_get_create_access_level(tag):
+        return gitlab_extract_access_level(tag, 'create_access_levels')
+
+    # Protected tags cannot be modified and saved (they lack SaveMixin).
+    # They need to be deleted and created anew.
+    try:
+        protected_tag = project.protectedtags.get(tag_name)
+        existing_create_level = tag_get_create_access_level(protected_tag)
+        if existing_create_level == create_access_level:
+            logger.debug(
+                " - Skipping, already requires '%s' create access.",
+                create_access_level.name
             )
-            protected_tag.delete()
+            return
 
-        except gitlab.exceptions.GitlabGetError:
-            # There is no such protected tag.
-            pass
+        logger.warning(
+            " - Recreating to change '%s' create access to '%s'.",
+            existing_create_level.name, create_access_level.name
+        )
+        protected_tag.delete()
 
-        project.protectedtags.create({
-            'name': tag_name,
-            'create_access_level': create_access_level
-        })
+    except gitlab.exceptions.GitlabGetError:
+        # There is no such protected tag.
+        pass
+
+    project.protectedtags.create({
+        'name': tag_name,
+        'create_access_level': create_access_level
+    })
 
 
 @register_command('unprotect-tag')
