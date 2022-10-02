@@ -577,9 +577,8 @@ def action_unprotect_branch(
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         branch = project.branches.get(branch_name)
         logger.info(
-            "Unprotecting branch %s in %s",
-            branch.name,
-            project.path_with_namespace
+            "Unprotecting branch '%s' in %s",
+            branch.name, project.path_with_namespace
         )
         branch.unprotect()
 
@@ -683,9 +682,8 @@ def action_protect_tag(
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         logger.info(
-            "Protecting tag %s in %s",
-            tag_name,
-            project.path_with_namespace
+            "Protecting tag '%s' in %s",
+            tag_name, project.path_with_namespace
         )
 
         # Protected tags cannot be modified and saved (they lack SaveMixin).
@@ -812,12 +810,12 @@ def action_add_member(
         raise Exception("Unsupported access level.")
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        project_path = project.path_with_namespace
+
         try:
             logger.info(
-                "Adding %s to %s (as %s)",
-                user.username,
-                project.path_with_namespace,
-                level
+                "Adding %s (as %s) to %s",
+                user.username, level, project_path
             )
             if not dry_run:
                 project.members.create({
@@ -837,11 +835,8 @@ def action_add_member(
                     member.save()
             else:
                 logger.error(
-                    "Failed to add %s to %s (as %s): %s",
-                    user.username,
-                    project.path_with_namespace,
-                    level,
-                    exp
+                    "Failed to add %s (as %s) to %s: %s",
+                    user.username, level, project_path, exp
                 )
 
 
