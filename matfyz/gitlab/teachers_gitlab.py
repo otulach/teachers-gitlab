@@ -506,7 +506,7 @@ def action_fork(
 
 
 @register_command('protect')
-def action_set_branch_protection(
+def action_protect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(False),
