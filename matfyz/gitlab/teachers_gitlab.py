@@ -826,28 +826,15 @@ def action_add_member(
         metavar='PROJECT_PATH_WITH_FORMAT',
         help='Project path, formatted from CSV columns.'
     ),
-    access_level: ActionParameter(
+    access_level: AccessLevelActionParameter(
         'access-level',
         required=True,
-        metavar='LEVEL',
-        choices=['guest', 'devel', 'developer', 'reporter', 'maintainer'],
-        help='Access level: devel or reporter.'
+        help="Access level granted to the member in the project."
     )
 ):
     """
     Add members to multiple projects.
     """
-
-    if access_level == 'guest':
-        level = gitlab.GUEST_ACCESS
-    elif access_level == 'reporter':
-        level = gitlab.REPORTER_ACCESS
-    elif (access_level == 'devel') or (access_level == 'developer'):
-        level = gitlab.DEVELOPER_ACCESS
-    elif access_level == 'maintainer':
-        level = gitlab.MAINTAINER_ACCESS
-    else:
-        raise Exception("Unsupported access level.")
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         project_path = project.path_with_namespace
@@ -855,12 +842,12 @@ def action_add_member(
         try:
             logger.info(
                 "Adding %s (as %s) to %s",
-                user.username, level, project_path
+                user.username, access_level.name, project_path
             )
             if not dry_run:
                 project.members.create({
                     'user_id': user.id,
-                    'access_level': level,
+                    'access_level': access_level,
                 })
         except gitlab.GitlabCreateError as exp:
             if exp.response_code == http.HTTPStatus.CONFLICT:
@@ -876,7 +863,7 @@ def action_add_member(
             else:
                 logger.error(
                     "Failed to add %s (as %s) to %s: %s",
-                    user.username, level, project_path, exp
+                    user.username, access_level.name, project_path, exp
                 )
 
 
