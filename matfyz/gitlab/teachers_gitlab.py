@@ -220,6 +220,46 @@ class ActionParameter(Parameter):
         return getattr(parsed_options, 'arg_' + argument_name)
 
 
+class AccessLevelActionParameter(ActionParameter):
+    """
+    Parameter annotation to create an access level action parameter.
+    """
+
+    def __init__(self, name, **kwargs):
+        ActionParameter.__init__(
+            self, name,
+            # Provide available access level names as choices.
+            choices=[level.name for level in list(gitlab.const.AccessLevel)],
+            # Accept both lower and upper case access level names.
+            type=str.upper,
+            **kwargs
+        )
+
+    def get_value(self, argument_name, glb, parsed_options):
+        level = ActionParameter.get_value(self, argument_name, glb, parsed_options)
+        # Convert the access level name to AccessLevel instance.
+        return gitlab_get_access_level(level)
+
+
+def gitlab_get_access_level(level):
+    """
+    Looks up a GitLab AccessLevel instance.
+    """
+    if type(level) is str:
+        return gitlab.const.AccessLevel[level]
+    elif type(level) is int:
+        return gitlab.const.AccessLevel(level)
+    elif type(level) is gitlab.const.AccessLevel:
+        return level
+    else:
+        raise ValueError(f"invalid access level: {level}")
+
+
+def gitlab_extract_access_level(gl_object, access_type):
+    access_level_value = getattr(gl_object, access_type)[0]['access_level']
+    return gitlab_get_access_level(access_level_value)
+
+
 class CommandParser:
     """
     Wrapper for argparse for Teachers GitLab.
