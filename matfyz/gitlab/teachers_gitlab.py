@@ -370,6 +370,79 @@ def action_accounts(
         ))
 
 
+@register_command('clone')
+def action_clone(
+    glb: GitlabInstanceParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    local_path_template: ActionParameter(
+        'to',
+        required=True,
+        metavar='LOCAL_PATH_WITH_FORMAT',
+        help='Local repository path, formatted from CSV columns.'
+    ),
+    branch: ActionParameter(
+        'branch',
+        default='master',
+        metavar='BRANCH',
+        help='Branch to clone, defaults to master.'
+    ),
+    commit: ActionParameter(
+        'commit',
+        default=None,
+        metavar='COMMIT_WITH_FORMAT',
+        help='Commit to reset to after clone.'
+    ),
+    deadline: ActionParameter(
+        'deadline',
+        default='now',
+        metavar='YYYY-MM-DDTHH:MM:SSZ',
+        help='Submission deadline (defaults to now).'
+    ),
+    blacklist: ActionParameter(
+        'blacklist',
+        default=None,
+        metavar='BLACKLIST',
+        help='Commit authors to ignore (regular expression).'
+    )
+):
+    """
+    Clone multiple repositories.
+    """
+
+    # FIXME: commit and deadline are mutually exclusive
+
+    if deadline == 'now':
+        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+
+    if blacklist:
+        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
+    else:
+        commit_filter = lambda commit: True
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        project = mg.get_canonical_project(glb, project_template.format(**user.row))
+        local_path = local_path_template.format(**user.row)
+
+        if commit:
+            last_commit = project.commits.get(commit.format(**user.row))
+        else:
+            last_commit = mg.get_commit_before_deadline(
+                glb,
+                project,
+                deadline,
+                branch,
+                commit_filter
+            )
+        mg.clone_or_fetch(glb, project, local_path)
+        mg.reset_to_commit(local_path, last_commit.id)
+
+
 @register_command('fork')
 def action_fork(
     glb: GitlabInstanceParameter(),
@@ -1095,79 +1168,6 @@ def action_get_pipeline_at_commit(
         result[project.path_with_namespace] = entry
 
     print(json.dumps(result, indent=4))
-
-
-@register_command('clone')
-def action_clone(
-    glb: GitlabInstanceParameter(),
-    users: UserListParameter(False),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
-    local_path_template: ActionParameter(
-        'to',
-        required=True,
-        metavar='LOCAL_PATH_WITH_FORMAT',
-        help='Local repository path, formatted from CSV columns.'
-    ),
-    branch: ActionParameter(
-        'branch',
-        default='master',
-        metavar='BRANCH',
-        help='Branch to clone, defaults to master.'
-    ),
-    commit: ActionParameter(
-        'commit',
-        default=None,
-        metavar='COMMIT_WITH_FORMAT',
-        help='Commit to reset to after clone.'
-    ),
-    deadline: ActionParameter(
-        'deadline',
-        default='now',
-        metavar='YYYY-MM-DDTHH:MM:SSZ',
-        help='Submission deadline (defaults to now).'
-    ),
-    blacklist: ActionParameter(
-        'blacklist',
-        default=None,
-        metavar='BLACKLIST',
-        help='Commit authors to ignore (regular expression).'
-    )
-):
-    """
-    Clone multiple repositories.
-    """
-
-    # FIXME: commit and deadline are mutually exclusive
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
-
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
-
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project = mg.get_canonical_project(glb, project_template.format(**user.row))
-        local_path = local_path_template.format(**user.row)
-
-        if commit:
-            last_commit = project.commits.get(commit.format(**user.row))
-        else:
-            last_commit = mg.get_commit_before_deadline(
-                glb,
-                project,
-                deadline,
-                branch,
-                commit_filter
-            )
-        mg.clone_or_fetch(glb, project, local_path)
-        mg.reset_to_commit(local_path, last_commit.id)
 
 
 @register_command('deadline-commit')
