@@ -652,12 +652,22 @@ def action_unprotect_branch(
     """
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        branch = project.branches.get(branch_name)
         logger.info(
             "Unprotecting branch '%s' in %s",
-            branch.name, project.path_with_namespace
+            branch_name, project.path_with_namespace
         )
-        branch.unprotect()
+        gitlab_unprotect_branch(logger, project, branch_name)
+
+
+def gitlab_unprotect_branch(logger, project, branch_name):
+    try:
+        protected_branch = project.protectedbranches.get(branch_name)
+        logger.debug("- Found protected branch '%s', deleting.", protected_branch.name)
+        protected_branch.delete()
+
+    except gitlab.exceptions.GitlabGetError:
+        logger.debug("- Protected branch '%s' not found.", branch_name)
+        pass
 
 
 @register_command('create-tag')
