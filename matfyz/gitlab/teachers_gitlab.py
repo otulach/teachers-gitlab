@@ -712,7 +712,7 @@ def action_protect_tag(
 
 
 @register_command('unprotect-tag')
-def action_unset_tag_protection(
+def action_unprotect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(False),
@@ -735,13 +735,13 @@ def action_unset_tag_protection(
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         logger.info(
-            "Unprotecting tag %s in %s",
-            tag_name,
-            project.path_with_namespace
+            "Unprotecting tag '%s' in %s",
+            tag_name, project.path_with_namespace
         )
         try:
-            existing = project.protectedtags.get(tag_name)
-            existing.delete()
+            protected_tag = project.protectedtags.get(tag_name)
+            protected_tag.delete()
+
         except gitlab.exceptions.GitlabGetError:
             logger.debug("Skipping as it is not protected.")
 
