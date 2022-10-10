@@ -727,7 +727,6 @@ def action_add_member(
                     )
                     member.access_level = level
                     member.save()
-                pass
             else:
                 logger.error(
                     "Failed to add %s to %s (as %s): %s",
