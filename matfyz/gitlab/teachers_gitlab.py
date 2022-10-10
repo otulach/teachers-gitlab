@@ -718,6 +718,15 @@ def action_add_member(
                 })
         except gitlab.GitlabCreateError as exp:
             if exp.response_code == http.HTTPStatus.CONFLICT:
+                # Member exists so check and optionally update the access level.
+                member = project.members.get(user.id)
+                if member.access_level != level:
+                    logger.info(
+                        "Updating %s access from %s to %s",
+                        user.username, member.access_level, level
+                    )
+                    member.access_level = level
+                    member.save()
                 pass
             else:
                 logger.error(
