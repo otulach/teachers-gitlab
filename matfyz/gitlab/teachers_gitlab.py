@@ -621,13 +621,13 @@ def _project_protect_branch(project, branch_name, merge_access_level, push_acces
         existing_push_level = branch_get_push_access_level(protected_branch)
         if existing_merge_level == merge_access_level and existing_push_level == push_access_level:
             logger.debug(
-                " - Already exists with correct '%s/%s' merge/push access.",
+                "- Already exists with '%s/%s' merge/push access, skipping.",
                 merge_access_level.name, push_access_level.name
             )
             return
 
-        logger.warning(
-            " - Recreating to change '%s/%s' merge/push access to '%s/%s'.",
+        logger.info(
+            "- Already exists with '%s/%s' merge/push access, updating to '%s/%s'.",
             existing_merge_level.name, existing_push_level.name,
             merge_access_level.name, push_access_level.name
         )
@@ -796,13 +796,13 @@ def _project_protect_tag(project, tag_name, create_access_level, logger):
         existing_create_level = tag_get_create_access_level(protected_tag)
         if existing_create_level == create_access_level:
             logger.debug(
-                " - Already exists with correct '%s' create access.",
+                "- Already exists with '%s' create access, skipping.",
                 create_access_level.name
             )
             return
 
-        logger.warning(
-            " - Recreating to change '%s' create access to '%s'.",
+        logger.info(
+            "- Already exists with '%s' create access, updating to '%s'.",
             existing_create_level.name, create_access_level.name
         )
         protected_tag.delete()
