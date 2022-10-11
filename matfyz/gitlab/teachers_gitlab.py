@@ -209,15 +209,19 @@ class ActionParameter(Parameter):
         self.name = name
         self.extra_args = kwargs
 
+    @staticmethod
+    def _dest_name(argument_name):
+        return 'arg_' + argument_name
+
     def register(self, argument_name, subparser):
         subparser.add_argument(
             '--' + self.name,
-            dest='arg_' + argument_name,
+            dest=self._dest_name(argument_name),
             **self.extra_args
         )
 
     def get_value(self, argument_name, glb, parsed_options):
-        return getattr(parsed_options, 'arg_' + argument_name)
+        return getattr(parsed_options, self._dest_name(argument_name))
 
 
 class AccessLevelActionParameter(ActionParameter):
@@ -225,7 +229,7 @@ class AccessLevelActionParameter(ActionParameter):
     Parameter annotation to create an access level action parameter.
     """
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, compat_flags=None, **kwargs):
         ActionParameter.__init__(
             self, name,
             # Provide available access level names as choices.
@@ -234,11 +238,31 @@ class AccessLevelActionParameter(ActionParameter):
             type=str.upper,
             **kwargs
         )
+        self.compat_flags = compat_flags if compat_flags else []
+
+    def register(self, argument_name, subparser):
+        # Compatibility flags are mutually exclusive with each
+        # other and the original parameter.
+        if self.compat_flags:
+            subparser = subparser.add_mutually_exclusive_group()
+
+        ActionParameter.register(self, argument_name, subparser)
+
+        # Compatibility flags set the original parameter value
+        # to predefined access levels.
+        for flag in self.compat_flags:
+            subparser.add_argument(
+                '--' + flag["name"],
+                dest=self._dest_name(argument_name),
+                action='store_const',
+                const=flag["level"],
+                help=flag["help"]
+            )
 
     def get_value(self, argument_name, glb, parsed_options):
-        level = ActionParameter.get_value(self, argument_name, glb, parsed_options)
-        # Convert the access level name to AccessLevel instance.
-        return gitlab_get_access_level(level)
+        # The value may be a string or AccessLevel instance. Make sure to return the latter.
+        value = ActionParameter.get_value(self, argument_name, glb, parsed_options)
+        return gitlab_get_access_level(value)
 
 
 def gitlab_get_access_level(level):
@@ -578,13 +602,23 @@ def action_protect_branch(
     ),
     merge_access_level: AccessLevelActionParameter(
         'merge-access-level',
-        default=gitlab.const.AccessLevel.DEVELOPER,
-        help="Set access level required to merge into this branch. Defaults to 'DEVELOPER'."
+        default=gitlab.const.AccessLevel.MAINTAINER,
+        help="Access level required to merge to this branch. Defaults to 'MAINTAINER'.",
+        compat_flags=[{
+            "name": "developers-can-merge",
+            "help": "DEPRECATED: Allow developers to merge to this branch.",
+            "level": gitlab.const.AccessLevel.DEVELOPER
+        }]
     ),
     push_access_level: AccessLevelActionParameter(
         'push-access-level',
         default=gitlab.const.AccessLevel.MAINTAINER,
-        help="Set access level required to push into this branch. Defaults to 'MAINTAINER'."
+        help="Access level required to push to this branch. Defaults to 'MAINTAINER'.",
+        compat_flags=[{
+            "name": "developers-can-push",
+            "help": "DEPRECATED: Allow developers to push to this branch.",
+            "level": gitlab.const.AccessLevel.DEVELOPER
+        }]
     )
 ):
     """
@@ -765,8 +799,20 @@ def action_protect_tag(
     ),
     create_access_level: AccessLevelActionParameter(
         'create-access-level',
-        default=gitlab.const.AccessLevel.MAINTAINER,
-        help="Set access level required to create this tag. Defaults to 'MAINTAINER'."
+        default=gitlab.const.AccessLevel.NO_ACCESS,
+        help="Access level required to create this tag. Defaults to 'NO_ACCESS'.",
+        compat_flags=[
+            {
+                "name": "developers-can-create",
+                "help": "DEPRECATED: Allow developers to create this tag.",
+                "level": gitlab.const.AccessLevel.DEVELOPER
+            },
+            {
+                "name": "maintainers-can-create",
+                "help": "DEPRECATED: Allow maintainers to create this tag.",
+                "level": gitlab.const.AccessLevel.MAINTAINER
+            }
+        ]
     )
 ):
     """
