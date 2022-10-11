@@ -597,30 +597,25 @@ def action_protect_branch(
             branch_name, project.path_with_namespace
         )
 
-        gitlab_protect_branch(
-            logger, project, branch_name,
-            merge_access_level, push_access_level
-        )
+        _project_protect_branch(project, branch_name, merge_access_level, push_access_level, logger)
 
 
-def gitlab_protect_branch(
-    logger, project, branch_name, merge_access_level, push_access_level
-):
+def _project_protect_branch(project, branch_name, merge_access_level, push_access_level, logger):
     def branch_get_merge_access_level(branch):
         return gitlab_extract_access_level(branch, 'merge_access_levels')
 
     def branch_get_push_access_level(branch):
         return gitlab_extract_access_level(branch, 'push_access_levels')
 
-    # Protected branches cannot be modified and saved (they lack SaveMixin).
-    # They need to be deleted and created anew.
-    try:
-        protected_branch = project.protectedbranches.get(branch_name)
+    # Protected branches cannot be modified and saved (they lack the SaveMixin).
+    # If a protected branch already exists and does not have the desired access
+    # levels, it needs to be deleted and created anew.
+    if protected_branch := _project_get_protected_branch(project, branch_name):
         existing_merge_level = branch_get_merge_access_level(protected_branch)
         existing_push_level = branch_get_push_access_level(protected_branch)
         if existing_merge_level == merge_access_level and existing_push_level == push_access_level:
             logger.debug(
-                " - Skipping, already requires '%s/%s' merge/push access.",
+                " - Already exists with correct '%s/%s' merge/push access.",
                 merge_access_level.name, push_access_level.name
             )
             return
@@ -631,10 +626,6 @@ def gitlab_protect_branch(
             merge_access_level.name, push_access_level.name
         )
         protected_branch.delete()
-
-    except gitlab.exceptions.GitlabGetError:
-        # There is no such protected branch.
-        pass
 
     project.protectedbranches.create({
         'name': branch_name,
@@ -670,18 +661,22 @@ def action_unprotect_branch(
             "Unprotecting branch '%s' in %s",
             branch_name, project.path_with_namespace
         )
-        gitlab_unprotect_branch(logger, project, branch_name)
+        _project_unprotect_branch(project, branch_name, logger)
 
 
-def gitlab_unprotect_branch(logger, project, branch_name):
-    try:
-        protected_branch = project.protectedbranches.get(branch_name)
-        logger.debug("- Found protected branch '%s', deleting.", protected_branch.name)
+def _project_unprotect_branch(project, branch_name, logger):
+    if protected_branch := _project_get_protected_branch(project, branch_name):
         protected_branch.delete()
-
-    except gitlab.exceptions.GitlabGetError:
+    else:
         logger.debug("- Protected branch '%s' not found.", branch_name)
-        pass
+
+
+def _project_get_protected_branch(project, branch_name):
+    try:
+        return project.protectedbranches.get(branch_name)
+    except gitlab.exceptions.GitlabGetError:
+        # There is no such protected branch.
+        return None
 
 
 @register_command('create-tag')
@@ -773,26 +768,21 @@ def action_protect_tag(
             "Protecting tag '%s' in %s",
             tag_name, project.path_with_namespace
         )
-        gitlab_protect_tag(
-            logger, project, tag_name,
-            create_access_level
-        )
+        _project_protect_tag(project, tag_name, create_access_level, logger)
 
 
-def gitlab_protect_tag(
-    logger, project, tag_name, create_access_level
-):
+def _project_protect_tag(project, tag_name, create_access_level, logger):
     def tag_get_create_access_level(tag):
         return gitlab_extract_access_level(tag, 'create_access_levels')
 
-    # Protected tags cannot be modified and saved (they lack SaveMixin).
-    # They need to be deleted and created anew.
-    try:
-        protected_tag = project.protectedtags.get(tag_name)
+    # Protected tags cannot be modified and saved (they lack the SaveMixin).
+    # If a protected tag already exists and does not have the desired access
+    # levels, it needs to be deleted and created anew.
+    if protected_tag := _project_get_protected_tag(project, tag_name):
         existing_create_level = tag_get_create_access_level(protected_tag)
         if existing_create_level == create_access_level:
             logger.debug(
-                " - Skipping, already requires '%s' create access.",
+                " - Already exists with correct '%s' create access.",
                 create_access_level.name
             )
             return
@@ -802,10 +792,6 @@ def gitlab_protect_tag(
             existing_create_level.name, create_access_level.name
         )
         protected_tag.delete()
-
-    except gitlab.exceptions.GitlabGetError:
-        # There is no such protected tag.
-        pass
 
     project.protectedtags.create({
         'name': tag_name,
@@ -828,7 +814,7 @@ def action_unprotect_tag(
         'tag',
         required=True,
         metavar='GIT_TAG',
-        help='Git tag name to unset protection on.'
+        help='Git tag name to unprotect.'
     ),
 ):
     """
@@ -840,12 +826,22 @@ def action_unprotect_tag(
             "Unprotecting tag '%s' in %s",
             tag_name, project.path_with_namespace
         )
-        try:
-            protected_tag = project.protectedtags.get(tag_name)
-            protected_tag.delete()
+        _project_unprotect_tag(project, tag_name, logger)
 
-        except gitlab.exceptions.GitlabGetError:
-            logger.debug("Skipping as it is not protected.")
+
+def _project_unprotect_tag(project, tag_name, logger):
+    if protected_tag := _project_get_protected_tag(project, tag_name):
+        protected_tag.delete()
+    else:
+        logger.debug("- Protected tag '%s' not found.", tag_name)
+
+
+def _project_get_protected_tag(project, tag_name):
+    try:
+        return project.protectedtags.get(tag_name)
+    except gitlab.exceptions.GitlabGetError:
+        # There is no such protected tag.
+        return None
 
 
 @register_command('get-members')
