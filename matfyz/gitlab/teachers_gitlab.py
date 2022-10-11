@@ -269,11 +269,11 @@ def gitlab_get_access_level(level):
     """
     Looks up a GitLab AccessLevel instance.
     """
-    if type(level) is str:
+    if isinstance(level, str):
         return gitlab.const.AccessLevel[level]
-    elif type(level) is int:
+    elif isinstance(level, int):
         return gitlab.const.AccessLevel(level)
-    elif type(level) is gitlab.const.AccessLevel:
+    elif isinstance(level, gitlab.const.AccessLevel):
         return level
     else:
         raise ValueError(f"invalid access level: {level}")
