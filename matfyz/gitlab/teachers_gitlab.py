@@ -895,34 +895,54 @@ def action_add_member(
     """
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project_path = project.path_with_namespace
+        logger.info(
+            "Adding %s (%s) to %s",
+            user.username, access_level.name, project.path_with_namespace
+        )
+
+        if dry_run:
+            continue
 
         try:
-            logger.info(
-                "Adding %s (as %s) to %s",
-                user.username, access_level.name, project_path
+            _project_add_member(project, user, access_level, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to add member: %s", exp)
+
+
+def _project_add_member(project, user, access_level, logger):
+    if member := _project_get_member(project, user):
+        # If a member already exists with correct access level, do nothing,
+        # otherwise update the access level (project member attributes can
+        # be updated and saved).
+        existing_access_level = gitlab_get_access_level(member.access_level)
+        if existing_access_level == access_level:
+            logger.debug(
+                "- Already exists with '%s' access, skipping.",
+                access_level.name
             )
-            if not dry_run:
-                project.members.create({
-                    'user_id': user.id,
-                    'access_level': access_level,
-                })
-        except gitlab.GitlabCreateError as exp:
-            if exp.response_code == http.HTTPStatus.CONFLICT:
-                # Member exists so check and optionally update the access level.
-                member = project.members.get(user.id)
-                if member.access_level != level:
-                    logger.info(
-                        "Updating %s access from %s to %s",
-                        user.username, member.access_level, level
-                    )
-                    member.access_level = level
-                    member.save()
-            else:
-                logger.error(
-                    "Failed to add %s (as %s) to %s: %s",
-                    user.username, access_level.name, project_path, exp
-                )
+            return
+
+        logger.info(
+            "- Already exists with '%s' access, updating to '%s'.",
+            existing_access_level.name, access_level.name
+        )
+        member.access_level = access_level
+        member.save()
+
+    else:
+        # The user is not a member of the project, create a new member.
+        project.members.create({
+            'user_id': user.id,
+            'access_level': access_level,
+        })
+
+
+def _project_get_member(project, user):
+    try:
+        return project.members.get(user.id)
+    except gitlab.GitlabGetError:
+        # There is no such member in the project.
+        return None
 
 
 @register_command('remove-member')
