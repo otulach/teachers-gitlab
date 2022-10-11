@@ -597,7 +597,13 @@ def action_protect_branch(
             branch_name, project.path_with_namespace
         )
 
-        _project_protect_branch(project, branch_name, merge_access_level, push_access_level, logger)
+        try:
+            _project_protect_branch(
+                project, branch_name, merge_access_level, push_access_level,
+                logger
+            )
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to protect branch: %s", exp)
 
 
 def _project_protect_branch(project, branch_name, merge_access_level, push_access_level, logger):
@@ -661,7 +667,11 @@ def action_unprotect_branch(
             "Unprotecting branch '%s' in %s",
             branch_name, project.path_with_namespace
         )
-        _project_unprotect_branch(project, branch_name, logger)
+
+        try:
+            _project_unprotect_branch(project, branch_name, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to unprotect branch: %s", exp)
 
 
 def _project_unprotect_branch(project, branch_name, logger):
@@ -768,7 +778,11 @@ def action_protect_tag(
             "Protecting tag '%s' in %s",
             tag_name, project.path_with_namespace
         )
-        _project_protect_tag(project, tag_name, create_access_level, logger)
+
+        try:
+            _project_protect_tag(project, tag_name, create_access_level, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to protect tag: %s", exp)
 
 
 def _project_protect_tag(project, tag_name, create_access_level, logger):
@@ -826,7 +840,11 @@ def action_unprotect_tag(
             "Unprotecting tag '%s' in %s",
             tag_name, project.path_with_namespace
         )
-        _project_unprotect_tag(project, tag_name, logger)
+
+        try:
+            _project_unprotect_tag(project, tag_name, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to unprotect tag: %s", exp)
 
 
 def _project_unprotect_tag(project, tag_name, logger):
