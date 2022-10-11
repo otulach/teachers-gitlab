@@ -955,14 +955,6 @@ def _project_add_member(project, user, access_level, logger):
         })
 
 
-def _project_get_member(project, user):
-    try:
-        return project.members.get(user.id)
-    except gitlab.GitlabGetError:
-        # There is no such member in the project.
-        return None
-
-
 @register_command('remove-member')
 def action_remove_member(
     glb: GitlabInstanceParameter(),
@@ -981,27 +973,32 @@ def action_remove_member(
     """
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project_path = project.path_with_namespace
+        logger.info(
+            "Removing %s from %s", user.username, project.path_with_namespace
+        )
+
+        if dry_run:
+            continue
 
         try:
-            member = project.members.get(user.id)
-            access_level = gitlab.const.AccessLevel(member.access_level)
-            logger.info(
-                "Removing %s (%s) from %s",
-                user.username, access_level.name, project_path
-            )
+            _project_remove_member(project, user, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to remove member: %s", exp)
 
-            if not dry_run:
-                try:
-                    member.delete()
-                except gitlab.GitlabDeleteError as exp:
-                    logger.warning(
-                        "Failed to remove %s (%s) from %s: %s",
-                        user.username, access_level.name, project_path, exp
-                    )
 
-        except gitlab.GitlabGetError:
-            logger.warning("Member %s not found in %s", user.username, project_path)
+def _project_remove_member(project, user, logger):
+    if member := _project_get_member(project, user):
+        member.delete()
+    else:
+        logger.debug("- Member '%s' not found.", user.username)
+
+
+def _project_get_member(project, user):
+    try:
+        return project.members.get(user.id)
+    except gitlab.GitlabGetError:
+        # There is no such member in the project.
+        return None
 
 
 @register_command('get-file')
