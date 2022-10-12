@@ -436,7 +436,7 @@ def action_accounts(
 
 
 def get_regex_blacklist_filter(blacklist_re, func):
-    def accept_all():
+    def accept_all(_):
         return True
 
     def reject_blacklist_matches(obj):
