@@ -13,9 +13,7 @@ import pathlib
 import subprocess
 import time
 
-import dateparser
 import gitlab
-import pytz
 import requests
 
 
@@ -228,14 +226,21 @@ def get_timestamp(ts):
     """
     Try to convert any string to datetime with a timezone.
     """
+    import dateparser
 
     result = dateparser.parse(ts)
-    try:
-        tz = pytz.timezone('UTC')
-        return tz.localize(result)
-    except ValueError:
-        # Time zone already set
-        return result
+    if not result:
+        # Propagate parsing errors as exceptions.
+        raise ValueError
+
+    if not result.tzinfo:
+        from datetime import datetime
+
+        # Add local time zone if necessary.
+        local_tz = datetime.now().astimezone().tzinfo
+        return result.replace(tzinfo=local_tz)
+
+    return result
 
 
 def get_commit_with_tag(glb, project, tag_name):
