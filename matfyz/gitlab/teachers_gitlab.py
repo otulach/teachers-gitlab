@@ -512,12 +512,9 @@ def action_clone(
             last_commit = project.commits.get(commit.format(**user.row))
         else:
             last_commit = mg.get_commit_before_deadline(
-                glb,
-                project,
-                deadline,
-                branch,
-                commit_filter
+                glb, project, deadline, branch, commit_filter
             )
+
         mg.clone_or_fetch(glb, project, local_path)
         mg.reset_to_commit(local_path, last_commit.id)
 
@@ -1103,11 +1100,7 @@ def action_get_file(
 
         try:
             last_commit = mg.get_commit_before_deadline(
-                glb,
-                project,
-                deadline,
-                branch,
-                commit_filter
+                glb, project, deadline, branch, commit_filter
             )
         except gitlab.exceptions.GitlabGetError:
             logger.error("No matching commit in %s", project.path_with_namespace)
@@ -1117,15 +1110,12 @@ def action_get_file(
         if current_content is None:
             logger.error(
                 "File %s does not exist in %s",
-                remote_file,
-                project.path_with_namespace
+                remote_file, project.path_with_namespace
             )
         else:
             logger.info(
                 "File %s in %s has %dB.",
-                remote_file,
-                project.path_with_namespace,
-                len(current_content)
+                remote_file, project.path_with_namespace, len(current_content)
             )
             with open(local_file, "wb") as f:
                 f.write(current_content)
@@ -1454,12 +1444,7 @@ def action_deadline_commits(
         branch = branch_template.format(**user.row)
         try:
             last_commit = mg.get_commit_before_deadline(
-                glb,
-                project,
-                deadline,
-                branch,
-                commit_filter,
-                prefer_tag
+                glb, project, deadline, branch, commit_filter, prefer_tag
             )
         except gitlab.exceptions.GitlabGetError:
             class CommitMock:
@@ -1469,7 +1454,6 @@ def action_deadline_commits(
             last_commit = CommitMock('0000000000000000000000000000000000000000')
 
         logger.debug("%s at %s", project.path_with_namespace, last_commit.id)
-
         line = output_template.format(commit=last_commit, **user.row)
         print(line, file=output)
 
