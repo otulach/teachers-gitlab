@@ -22,7 +22,6 @@ import os
 import pathlib
 import re
 import sys
-import time
 
 import gitlab
 
@@ -222,6 +221,16 @@ class ActionParameter(Parameter):
 
     def get_value(self, argument_name, glb, parsed_options):
         return getattr(parsed_options, self._dest_name(argument_name))
+
+
+class DateTimeActionParameter(ActionParameter):
+    """
+    Parameter annotation to create a datetime action parameter.
+    """
+    def __init__(self, name, **kwargs):
+        ActionParameter.__init__(
+            self, name, type=mg.get_timestamp, **kwargs
+        )
 
 
 class AccessLevelActionParameter(ActionParameter):
@@ -481,7 +490,7 @@ def action_clone(
         metavar='COMMIT_WITH_FORMAT',
         help='Commit to reset to after clone.'
     ),
-    deadline: ActionParameter(
+    deadline: DateTimeActionParameter(
         'deadline',
         default='now',
         metavar='YYYY-MM-DDTHH:MM:SSZ',
@@ -499,9 +508,6 @@ def action_clone(
     """
 
     # FIXME: commit and deadline are mutually exclusive
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
     commit_filter = get_commit_author_email_filter(blacklist)
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
@@ -1073,11 +1079,11 @@ def action_get_file(
         metavar='PROJECT_PATH_WITH_FORMAT',
         help='Project path, formatted from CSV columns.'
     ),
-    deadline: ActionParameter(
+    deadline: DateTimeActionParameter(
         'deadline',
         default='now',
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
+        metavar='YYYY-MM-DDTHH:MM:SSZ',
+        help='Submission deadline (defaults to now).'
     ),
     blacklist: ActionParameter(
         'blacklist',
@@ -1089,9 +1095,6 @@ def action_get_file(
     """
     Get file from multiple repositories.
     """
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
     commit_filter = get_commit_author_email_filter(blacklist)
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
@@ -1392,7 +1395,7 @@ def action_deadline_commits(
         metavar='TAG_WITH_FORMAT',
         help='Prefer commit with this tag (but also before deadline).'
     ),
-    deadline: ActionParameter(
+    deadline: DateTimeActionParameter(
         'deadline',
         default='now',
         metavar='YYYY-MM-DDTHH:MM:SSZ',
@@ -1431,9 +1434,6 @@ def action_deadline_commits(
         output = open(output_filename, 'w')
     else:
         output = sys.stdout
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
     commit_filter = get_commit_author_email_filter(blacklist)
 
