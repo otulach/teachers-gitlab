@@ -250,9 +250,10 @@ def get_commit_with_tag(glb, project, tag_name):
     """
 
     project = get_canonical_project(glb, project)
-    for t in project.tags.list():
-        if t.name == tag_name:
-            return t.commit
+
+    tags = project.tags.list(iterator=True)
+    if tag := next(filter(lambda t: t.name == tag_name, tags), None):
+        return project.commits.get(tag.commit['id'])
 
     return None
 
@@ -267,18 +268,19 @@ def get_commit_before_deadline(
     if tag:
         commit = get_commit_with_tag(glb, project, tag)
         if commit:
-            ts = get_timestamp(commit['created_at'])
-            ts_deadline = get_timestamp(deadline)
-            if ts <= ts_deadline:
-                commit = project.commits.get(commit['id'])
+            ts = get_timestamp(commit.created_at)
+            if ts <= deadline:
                 return commit
             else:
                 # Tag is after deadline, fallback to normal resolution
                 pass
-    commits = project.commits.list(ref_name=branch, until=deadline)
-    for commit in commits:
-        if commit_filter(commit):
-            return commit
+
+    # By default, commits are ordered in reverse chronological order, i.e.,
+    # the most recent first. We therefore take the first matching commit.
+    commits = project.commits.list(ref_name=branch, until=deadline.isoformat(), iterator=True)
+    if commit := next(filter(commit_filter, commits), None):
+        return commit
+
     raise gitlab.exceptions.GitlabGetError("No matching commit found.")
 
 
