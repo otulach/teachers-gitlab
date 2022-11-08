@@ -114,6 +114,105 @@ class LoggerParameter(Parameter):
         return logging.getLogger(parsed_options.command_name_)
 
 
+class ActionEntries:
+    def __init__(self, entries: list):
+        self.entries = entries
+
+    def rows(self):
+        yield from self.entries
+
+    def as_gitlab_users(self, glb: gitlab.client.Gitlab, login_column: str):
+        """
+        Converts entries to GitLab users.
+
+        Each entry is converted to a tuple (entry, user), with the user
+        login obtained from entry login column. For users that do not
+        exist, None is returned and a warning message is printed.
+
+        :param glb: GitLab instance to use
+        :param login_column: name of the entry column containing user login
+        :return: generator of (entry, user)
+        """
+        logger = logging.getLogger('gitlab-user-entries')
+
+        for entry in self.entries:
+            if user_login := entry.get(login_column):
+                matching_users = glb.users.list(username=user_login, iterator=True)
+                if user_object := next(matching_users, None):
+                    yield entry, user_object
+                    continue
+                else:
+                    logger.warning(f"User {user_login} not found.")
+            else:
+                logger.warning(f"No '{login_column}' column in {entry}.")
+
+            # No user found for the entry.
+            yield entry, None
+
+    def as_gitlab_projects(
+        self, glb: gitlab.client.Gitlab, project_template: str,
+        allow_duplicates: bool = False
+    ):
+        """
+        Converts entries to GitLab projects.
+
+        Each entry is converted to a tuple (entry, project), with the project
+        path obtained by formatting :project_template: using entry data.
+        For projects that cannot be found, None is returned and a warning
+        message is printed.
+
+        :param glb: GitLab instance to use
+        :param project_template: template for generating project names using entry data
+        :param allow_duplicates: whether to return duplicate projects, defaults to False
+        :return: generator of (entry, project)
+        """
+        logger = logging.getLogger('gitlab-project-entries')
+
+        observed_paths = set()
+        for entry in self.entries:
+            project_path = project_template.format(**entry)
+
+            # Track expanded project paths if duplicates are not allowed.
+            # If we allow duplicates, the set of observed paths will be empty.
+            if project_path in observed_paths:
+                continue
+
+            if not allow_duplicates:
+                observed_paths.add(project_path)
+
+            try:
+                project = mg.get_canonical_project(glb, project_path)
+                yield entry, project
+
+            except gitlab.exceptions.GitlabGetError:
+                logger.warning(f"Project '{project_path}' not found.")
+
+
+class ActionEntriesParameter(Parameter):
+    """
+    Parameter annotation to mark action entries for template expansion. If the
+    entries represent users, they must contain a column with user login.
+    """
+    def __init__(self):
+        Parameter.__init__(self)
+
+    def register(self, argument_name, subparser):
+        subparser.add_argument(
+            '--users', '--entries',
+            required=True,
+            dest='entries_csv',
+            metavar='LIST.csv',
+            help='CSV with entries on which to perform an action'
+        )
+
+    def get_value(self, argument_name, glb, parsed_options):
+        logger = logging.getLogger('gitlab-entries')
+        with open(parsed_options.entries_csv) as entries_csv:
+            entries = csv.DictReader(entries_csv)
+            logger.debug(f"Loaded entries with columns {entries.fieldnames}")
+            return ActionEntries(list(entries))
+
+
 class UserListParameter(Parameter):
     """
     Parameter annotation to mark list of users.
