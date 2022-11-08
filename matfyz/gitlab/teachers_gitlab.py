@@ -326,6 +326,20 @@ class DryRunActionParameter(ActionParameter):
         )
 
 
+class LoginColumnActionParameter(ActionParameter):
+    """
+    Parameter annotation to create an option for specifying login column.
+    """
+    def __init__(self):
+        ActionParameter.__init__(
+            self,
+            'login-column',
+            default='login',
+            metavar='COLUMN_NAME',
+            help='Column name with user login name.'
+        )
+
+
 class AccessLevelActionParameter(ActionParameter):
     """
     Parameter annotation to create an access level action parameter.
