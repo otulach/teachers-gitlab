@@ -1471,7 +1471,7 @@ def action_get_pipeline_at_commit(
 def action_deadline_commits(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1530,9 +1530,9 @@ def action_deadline_commits(
     output = open(output_filename, 'w') if output_filename else sys.stdout
     print(output_header, file=output)
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        prefer_tag = prefer_tag_template.format(**user.row) if prefer_tag_template else None
-        branch = branch_template.format(**user.row)
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        prefer_tag = prefer_tag_template.format(**entry) if prefer_tag_template else None
+        branch = branch_template.format(**entry)
         try:
             last_commit = mg.get_commit_before_deadline(
                 glb, project, deadline, branch, commit_filter, prefer_tag
@@ -1545,7 +1545,7 @@ def action_deadline_commits(
             last_commit = CommitMock('0000000000000000000000000000000000000000')
 
         logger.debug("%s at %s", project.path_with_namespace, last_commit.id)
-        line = output_template.format(commit=last_commit, **user.row)
+        line = output_template.format(commit=last_commit, **entry)
         print(line, file=output)
 
     if output_filename:
