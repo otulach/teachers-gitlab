@@ -566,7 +566,7 @@ def get_commit_author_email_filter(blacklist):
 @register_command('clone')
 def action_clone(
     glb: GitlabInstanceParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -611,17 +611,15 @@ def action_clone(
     # FIXME: commit and deadline are mutually exclusive
 
     commit_filter = get_commit_author_email_filter(blacklist)
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project = mg.get_canonical_project(glb, project_template.format(**user.row))
-        local_path = local_path_template.format(**user.row)
-
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
         if commit:
-            last_commit = project.commits.get(commit.format(**user.row))
+            last_commit = project.commits.get(commit.format(**entry))
         else:
             last_commit = mg.get_commit_before_deadline(
                 glb, project, deadline, branch, commit_filter
             )
 
+        local_path = local_path_template.format(**entry)
         mg.clone_or_fetch(glb, project, local_path)
         mg.reset_to_commit(local_path, last_commit.id)
 
