@@ -886,7 +886,7 @@ def action_create_tag(
 def action_protect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -921,7 +921,7 @@ def action_protect_tag(
     Set tag protection on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         logger.info(
             "Protecting tag '%s' in %s",
             tag_name, project.path_with_namespace
