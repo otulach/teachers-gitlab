@@ -1321,21 +1321,16 @@ def action_get_pipeline_at_commit(
 
     result = {}
     for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        pipelines = project.pipelines.list()
-
-        if commit:
-            commit_sha = commit.format(**user.row)
-        else:
-            commit_sha = None
+        commit_sha = commit.format(**user.row) if commit else None
 
         found_commit = False
         found_pipeline = None
-
-        for pipeline in pipelines:
+        for pipeline in project.pipelines.list(iterator=True):
             if not commit_sha:
                 found_commit = True
             elif pipeline.sha == commit_sha:
                 found_commit = True
+
             if not found_commit:
                 continue
 
@@ -1358,7 +1353,7 @@ def action_get_pipeline_at_commit(
                         "id": job.id,
                         "name": job.name,
                     }
-                    for job in found_pipeline.jobs.list()
+                    for job in found_pipeline.jobs.list(iterator=True)
                 ],
             }
 
