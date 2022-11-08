@@ -1344,7 +1344,7 @@ def action_put_file(
 @register_command('get-last-pipeline')
 def action_get_last_pipeline(
     glb: GitlabInstanceParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1364,7 +1364,7 @@ def action_get_last_pipeline(
 
     result = {}
     pipeline_states_only = []
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         pipelines = project.pipelines.list(iterator=True)
         last_pipeline = next(pipelines, None)
 
