@@ -1227,7 +1227,7 @@ def action_get_file(
 def action_put_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
@@ -1286,14 +1286,14 @@ def action_put_file(
         logger.error("--force-commit and --once together does not make sense, aborting.")
         return
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        from_file = from_file_template.format(**user.row)
-        to_file = to_file_template.format(**user.row)
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        to_file = to_file_template.format(**entry)
         extras = {
             'target_filename': to_file,
         }
-        commit_message = commit_message_template.format(GL=extras, **user.row)
+        commit_message = commit_message_template.format(GL=extras, **entry)
 
+        from_file = from_file_template.format(**entry)
         try:
             from_file_content = pathlib.Path(from_file).read_text()
         except FileNotFoundError:
