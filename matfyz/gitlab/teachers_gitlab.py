@@ -965,7 +965,7 @@ def _project_protect_tag(project, tag_name, create_access_level, logger):
 def action_unprotect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -983,7 +983,7 @@ def action_unprotect_tag(
     Unset tag protection on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         logger.info(
             "Unprotecting tag '%s' in %s",
             tag_name, project.path_with_namespace
