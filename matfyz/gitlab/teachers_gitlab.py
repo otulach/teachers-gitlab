@@ -1425,13 +1425,9 @@ def action_deadline_commits(
     Get last commits before deadline.
     """
 
-    if output_filename:
-        output = open(output_filename, 'w')
-    else:
-        output = sys.stdout
-
     commit_filter = get_commit_author_email_filter(blacklist)
 
+    output = open(output_filename, 'w') if output_filename else sys.stdout
     print(output_header, file=output)
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
