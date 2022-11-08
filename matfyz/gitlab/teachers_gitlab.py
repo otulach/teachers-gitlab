@@ -780,7 +780,7 @@ def _project_protect_branch(project, branch_name, merge_access_level, push_acces
 def action_unprotect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -798,7 +798,7 @@ def action_unprotect_branch(
     Unprotect branch on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         logger.info(
             "Unprotecting branch '%s' in %s",
             branch_name, project.path_with_namespace
