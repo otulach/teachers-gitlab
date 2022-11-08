@@ -1153,7 +1153,7 @@ def _project_get_member(project, user):
 def action_get_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1196,10 +1196,7 @@ def action_get_file(
     """
 
     commit_filter = get_commit_author_email_filter(blacklist)
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        remote_file = remote_file_template.format(**user.row)
-        local_file = local_file_template.format(**user.row)
-
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
         try:
             last_commit = mg.get_commit_before_deadline(
                 glb, project, deadline, branch, commit_filter
@@ -1208,6 +1205,7 @@ def action_get_file(
             logger.error("No matching commit in %s", project.path_with_namespace)
             continue
 
+        remote_file = remote_file_template.format(**entry)
         current_content = mg.get_file_contents(glb, project, last_commit.id, remote_file)
         if current_content is None:
             logger.error(
@@ -1219,6 +1217,8 @@ def action_get_file(
                 "File %s in %s has %dB.",
                 remote_file, project.path_with_namespace, len(current_content)
             )
+
+            local_file = local_file_template.format(**entry)
             with open(local_file, "wb") as f:
                 f.write(current_content)
 
