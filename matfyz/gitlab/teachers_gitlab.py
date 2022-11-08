@@ -523,7 +523,9 @@ def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=T
 
 @register_command('accounts')
 def action_accounts(
-    users: UserListParameter(False),
+    glb: GitlabInstanceParameter(),
+    entries: ActionEntriesParameter(),
+    login_column: LoginColumnActionParameter(),
     show_summary: ActionParameter(
         'show-summary',
         default=False,
@@ -534,20 +536,12 @@ def action_accounts(
     """
     List accounts that were not found.
     """
-    logger = logging.getLogger('gitlab-accounts')
-    users_total = 0
-    users_not_found = 0
-    for user in users:
-        users_total = users_total + 1
-        if hasattr(user, 'is_mock'):
-            logger.warning("User %s not found.", user.username)
-            users_not_found = users_not_found + 1
-            continue
+    users = list(entries.as_gitlab_users(glb, login_column))
     if show_summary:
+        entries_total = len(users)
+        users_found = len([u for _, u in users if u])
         print('Total: {}, Not-found: {}, Ok: {}'.format(
-            users_total,
-            users_not_found,
-            users_total - users_not_found
+            entries_total, entries_total - users_found, users_found
         ))
 
 
