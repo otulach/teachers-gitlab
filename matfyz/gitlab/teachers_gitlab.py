@@ -168,20 +168,22 @@ class ActionEntries:
         """
         logger = logging.getLogger('gitlab-project-entries')
 
-        observed_paths = set()
+        projects_by_path = {}
         for entry in self.entries:
             project_path = project_template.format(**entry)
 
-            # Track expanded project paths if duplicates are not allowed.
-            # If we allow duplicates, the set of observed paths will be empty.
-            if project_path in observed_paths:
+            if project := projects_by_path.get(project_path):
+                # We have seen the project before, but will return it only if
+                # we allow duplicates to be produced. Otherwise, move on.
+                if allow_duplicates:
+                    yield entry, project
+
                 continue
 
-            if not allow_duplicates:
-                observed_paths.add(project_path)
-
+            # We have not seen the project before, look it up.
             try:
                 project = mg.get_canonical_project(glb, project_path)
+                projects_by_path[project_path] = project
                 yield entry, project
 
             except gitlab.exceptions.GitlabGetError:
