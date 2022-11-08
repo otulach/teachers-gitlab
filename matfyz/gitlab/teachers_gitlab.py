@@ -1473,7 +1473,7 @@ def action_commit_stats(
 
     result = []
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        commits = project.commits.list(all=True, as_list=False)
+        commits = project.commits.list(all=True, iterator=True)
         commit_details = {}
         for c in commits:
             info = project.commits.get(c.id)
