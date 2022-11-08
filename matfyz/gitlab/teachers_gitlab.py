@@ -1405,7 +1405,7 @@ def action_get_last_pipeline(
 @register_command('get-pipeline-at-commit')
 def action_get_pipeline_at_commit(
     glb: GitlabInstanceParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1425,8 +1425,8 @@ def action_get_pipeline_at_commit(
     """
 
     result = {}
-    for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        commit_sha = commit.format(**user.row) if commit else None
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        commit_sha = commit.format(**entry) if commit else None
 
         found_commit = False
         found_pipeline = None
