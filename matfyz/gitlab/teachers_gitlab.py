@@ -1260,15 +1260,15 @@ def action_get_last_pipeline(
     result = {}
     pipeline_states_only = []
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        pipelines = project.pipelines.list()
-        if len(pipelines) == 0:
+        pipelines = project.pipelines.list(iterator=True)
+        last_pipeline = next(pipelines, None)
+
+        if not last_pipeline:
             result[project.path_with_namespace] = {
                 "status": "none"
             }
             pipeline_states_only.append("none")
             continue
-
-        last_pipeline = pipelines[0]
 
         entry = {
             "status": last_pipeline.status,
@@ -1278,7 +1278,7 @@ def action_get_last_pipeline(
         }
         pipeline_states_only.append(last_pipeline.status)
 
-        for job in last_pipeline.jobs.list():
+        for job in last_pipeline.jobs.list(iterator=True):
             entry["jobs"].append({
                 "status": job.status,
                 "id": job.id,
@@ -1292,7 +1292,7 @@ def action_get_last_pipeline(
         states_len = len(pipeline_states_only)
         for state, count in summary_by_overall_status.most_common():
             print("{}: {} ({:.0f}%)".format(state, count, 100 * count / states_len))
-        print("total: {}".format(states_len))
+        print(f"total: {states_len}")
     else:
         print(json.dumps(result, indent=4))
 
