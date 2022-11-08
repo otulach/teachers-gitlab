@@ -741,7 +741,7 @@ def action_create_tag(
         'ref',
         required=True,
         metavar='GIT_BRANCH_OR_COMMIT_WITH_TEMPLATE',
-        help='Git branch name (tip) or commit to tag.'
+        help='Git branch name (tip) or commit to tag, formatted from CSV columns.'
     ),
     commit_message_template: ActionParameter(
         'message',
@@ -1058,20 +1058,20 @@ def action_get_file(
     remote_file_template: ActionParameter(
         'remote-file',
         required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns..'
+        metavar='REMOTE_FILE_PATH_WITH_FORMAT',
+        help='Remote file path, formatted from CSV columns..'
     ),
     local_file_template: ActionParameter(
         'local-file',
         required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
+        metavar='LOCAL_FILE_PATH_WITH_FORMAT',
+        help='Local file path, formatted from CSV columns.'
     ),
     branch: ActionParameter(
         'branch',
         default='master',
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
+        metavar='BRANCH_WITH_FORMAT',
+        help='Repository branch, formatted from CSV columns.'
     ),
     deadline: DateTimeActionParameter(
         'deadline',
@@ -1311,11 +1311,12 @@ def action_get_pipeline_at_commit(
         'commit',
         default=None,
         metavar='COMMIT_WITH_FORMAT',
-        help='Commit to read pipeline status at.'
+        help='Commit to read pipeline status at, formatted from CSV columns.'
     ),
 ):
     """
-    Get pipeline status of multiple projects at or prior to specified commit, ignoring skipped pipelines.
+    Get pipeline status of multiple projects at or prior to specified
+    commit while ignoring skipped pipelines.
     """
 
     result = {}
