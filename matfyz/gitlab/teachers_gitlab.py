@@ -689,7 +689,7 @@ def action_fork(
 def action_protect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -727,7 +727,7 @@ def action_protect_branch(
     Set branch protection on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         logger.info(
             "Protecting branch '%s' in %s",
             branch_name, project.path_with_namespace
