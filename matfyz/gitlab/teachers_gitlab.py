@@ -829,7 +829,7 @@ def _project_get_protected_branch(project, branch_name):
 def action_create_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -859,8 +859,8 @@ def action_create_tag(
     Create a tag on a given commit or branch tip.
     """
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        ref_name = ref_name_template.format(**user.row)
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        ref_name = ref_name_template.format(**entry)
         params = {
             'tag_name': tag_name,
             'ref': ref_name,
@@ -870,7 +870,7 @@ def action_create_tag(
             extras = {
                 'tag': tag_name,
             }
-            params['message'] = commit_message_template.format(GL=extras, **user.row)
+            params['message'] = commit_message_template.format(GL=extras, **entry)
 
         logger.info("Creating tag %s on %s in %s", tag_name, ref_name, project.path_with_namespace)
         try:
