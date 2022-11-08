@@ -1555,7 +1555,7 @@ def action_deadline_commits(
 @register_command('commit-stats')
 def action_commit_stats(
     glb: GitlabInstanceParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1568,7 +1568,7 @@ def action_commit_stats(
     """
 
     result = []
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         commits = project.commits.list(all=True, iterator=True)
         commit_details = {}
         for c in commits:
