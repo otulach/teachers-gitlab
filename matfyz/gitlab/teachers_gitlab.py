@@ -119,8 +119,6 @@ class ActionEntries:
         self.entries = entries
         self.logger = logging.getLogger('action-entries')
 
-    def rows(self):
-        yield from self.entries
     def as_gitlab_user(self, entry, glb: gitlab.client.Gitlab, login_column: str):
         if user_login := entry.get(login_column):
             matching_users = glb.users.list(username=user_login, iterator=True)
@@ -488,37 +486,6 @@ class CommandParser:
             self.parsed_options.gitlab_instance,
             self.parsed_options.gitlab_config_file
         )
-
-
-def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=True):
-    """
-    Convert list of users to list of projects.
-
-    List of users (e.g. from UserListParameter) is converted to
-    a tuple of user and project, formatted according to given
-    project template.
-
-    Unknown projects are skipped, warning message is printed.
-
-    Returns a generator (yields).
-    """
-
-    logger = logging.getLogger('gitlab-project-list')
-    processed_projects = {}
-    for user in users:
-        project_path = project_template.format(**user.row)
-
-        # Skip already seen projects when needed
-        if (not allow_duplicates) and (project_path in processed_projects):
-            continue
-        processed_projects[project_path] = True
-
-        try:
-            project = mg.get_canonical_project(glb, project_path)
-            yield user, project
-        except gitlab.exceptions.GitlabGetError:
-            logger.warning("Project %s not found.", project_path)
-            continue
 
 
 @register_command('accounts')
