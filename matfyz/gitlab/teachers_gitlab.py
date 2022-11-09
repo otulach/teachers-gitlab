@@ -687,6 +687,9 @@ def action_protect_tag(
             tag_name,
             project.path_with_namespace
         )
+
+        # Protected tags cannot be modified and saved (they lack SaveMixin).
+        # They need to be deleted and created anew.
         try:
             protected_tag = project.protectedtags.get(tag_name)
             existing_create_level = protected_tag.create_access_levels[0]['access_level']
@@ -701,7 +704,9 @@ def action_protect_tag(
             protected_tag.delete()
 
         except gitlab.exceptions.GitlabGetError:
+            # There is no such protected tag.
             pass
+
         project.protectedtags.create({
             'name': tag_name,
             'create_access_level': create_access_level
