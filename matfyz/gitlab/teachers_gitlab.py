@@ -675,11 +675,11 @@ def action_protect_tag(
     Set tag protection on multiple projects.
     """
 
-    access_level = gitlab.NO_ACCESS
+    create_access_level = gitlab.NO_ACCESS
     if developers_can_create:
-        access_level = gitlab.DEVELOPER_ACCESS
+        create_access_level = gitlab.DEVELOPER_ACCESS
     if maintainers_can_create:
-        access_level = gitlab.MAINTAINER_ACCESS
+        create_access_level = gitlab.MAINTAINER_ACCESS
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         logger.info(
@@ -688,18 +688,23 @@ def action_protect_tag(
             project.path_with_namespace
         )
         try:
-            existing = project.protectedtags.get(tag_name)
-            existing_level = existing.create_access_levels[0]['access_level']
-            if existing_level == access_level:
+            protected_tag = project.protectedtags.get(tag_name)
+            existing_create_level = protected_tag.create_access_levels[0]['access_level']
+            if existing_create_level == create_access_level:
                 logger.debug("Skipping as it is already set.")
                 continue
-            logger.warning(" - Need to delete existing (access %d => %d) one first.", existing_level, access_level)
-            existing.delete()
+
+            logger.warning(
+                " - Need to delete existing (access %d => %d) one first.",
+                existing_create_level, create_access_level
+            )
+            protected_tag.delete()
+
         except gitlab.exceptions.GitlabGetError:
             pass
         project.protectedtags.create({
             'name': tag_name,
-            'create_access_level': access_level
+            'create_access_level': create_access_level
         })
 
 
