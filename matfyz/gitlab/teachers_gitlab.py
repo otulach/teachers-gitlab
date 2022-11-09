@@ -642,7 +642,7 @@ def action_create_tag(
 
 
 @register_command('protect-tag')
-def action_set_tag_protection(
+def action_protect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(False),
