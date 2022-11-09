@@ -121,6 +121,18 @@ class ActionEntries:
 
     def rows(self):
         yield from self.entries
+    def as_gitlab_user(self, entry, glb: gitlab.client.Gitlab, login_column: str):
+        if user_login := entry.get(login_column):
+            matching_users = glb.users.list(username=user_login, iterator=True)
+            if user_object := next(matching_users, None):
+                return user_object
+            else:
+                self.logger.warning(f"User {user_login} not found.")
+        else:
+            self.logger.error(f"Missing or empty '{login_column}' in {entry}.")
+
+        # No corresponding user for the entry.
+        return None
 
     def as_gitlab_users(self, glb: gitlab.client.Gitlab, login_column: str):
         """
@@ -134,21 +146,8 @@ class ActionEntries:
         :param login_column: name of the entry column containing user login
         :return: generator of (entry, user)
         """
-        logger = logging.getLogger('gitlab-user-entries')
-
         for entry in self.entries:
-            if user_login := entry.get(login_column):
-                matching_users = glb.users.list(username=user_login, iterator=True)
-                if user_object := next(matching_users, None):
-                    yield entry, user_object
-                    continue
-                else:
-                    logger.warning(f"User {user_login} not found.")
-            else:
-                logger.warning(f"No '{login_column}' column in {entry}.")
-
-            # No user found for the entry.
-            yield entry, None
+            yield entry, self.as_gitlab_user(entry, glb, login_column)
 
     def as_gitlab_projects(
         self, glb: gitlab.client.Gitlab, project_template: str,
