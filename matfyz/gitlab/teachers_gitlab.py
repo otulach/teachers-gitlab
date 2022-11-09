@@ -275,6 +275,17 @@ class LoginColumnActionParameter(ActionParameter):
         )
 
 
+class RequiredProjectActionParameter(ActionParameter):
+    def __init__(self):
+        ActionParameter.__init__(
+            self,
+            'project',
+            required=True,
+            metavar='PROJECT_PATH_WITH_FORMAT',
+            help='Project path, formatted from CSV columns.'
+        )
+
+
 class AccessLevelActionParameter(ActionParameter):
     """
     Parameter annotation to create an access level action parameter.
@@ -471,12 +482,7 @@ def get_commit_author_email_filter(blacklist):
 def action_clone(
     glb: GitlabInstanceParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     local_path_template: ActionParameter(
         'to',
         required=True,
@@ -593,12 +599,7 @@ def action_protect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     branch_name: ActionParameter(
         'branch',
         required=True,
@@ -684,12 +685,7 @@ def action_unprotect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     branch_name: ActionParameter(
         'branch',
         required=True,
@@ -733,12 +729,7 @@ def action_create_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     tag_name: ActionParameter(
         'tag',
         required=True,
@@ -790,12 +781,7 @@ def action_protect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     tag_name: ActionParameter(
         'tag',
         required=True,
@@ -869,12 +855,7 @@ def action_unprotect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     tag_name: ActionParameter(
         'tag',
         required=True,
@@ -948,12 +929,7 @@ def action_add_member(
     entries: ActionEntriesParameter(),
     login_column: LoginColumnActionParameter(),
     dry_run: DryRunActionParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     access_level: AccessLevelActionParameter(
         'access-level',
         required=True,
@@ -1015,12 +991,7 @@ def action_remove_member(
     entries: ActionEntriesParameter(),
     login_column: LoginColumnActionParameter(),
     dry_run: DryRunActionParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    )
+    project_template: RequiredProjectActionParameter()
 ):
     """
     Remove members from multiple projects.
@@ -1061,12 +1032,7 @@ def action_get_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     remote_file_template: ActionParameter(
         'remote-file',
         required=True,
@@ -1136,12 +1102,7 @@ def action_put_file(
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
     dry_run: DryRunActionParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     local_file_template: ActionParameter(
         'from',
         required=True,
@@ -1244,12 +1205,7 @@ def action_put_file(
 def action_get_last_pipeline(
     glb: GitlabInstanceParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     summary_only: ActionParameter(
         'summary-only',
         default=False,
@@ -1305,12 +1261,7 @@ def action_get_last_pipeline(
 def action_get_pipeline_at_commit(
     glb: GitlabInstanceParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     commit_template: ActionParameter(
         'commit',
         default=None,
@@ -1371,12 +1322,7 @@ def action_deadline_commits(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter(),
     branch_template: ActionParameter(
         'branch',
         default='master',
@@ -1454,12 +1400,7 @@ def action_deadline_commits(
 def action_commit_stats(
     glb: GitlabInstanceParameter(),
     entries: ActionEntriesParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
+    project_template: RequiredProjectActionParameter()
 ):
     """
     Get basic added/removed lines for projects.
