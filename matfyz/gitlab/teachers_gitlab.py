@@ -117,6 +117,7 @@ class LoggerParameter(Parameter):
 class ActionEntries:
     def __init__(self, entries: list):
         self.entries = entries
+        self.logger = logging.getLogger('action-entries')
 
     def rows(self):
         yield from self.entries
@@ -166,12 +167,10 @@ class ActionEntries:
         :param allow_duplicates: whether to return duplicate projects, defaults to False
         :return: generator of (entry, project)
         """
-        logger = logging.getLogger('gitlab-project-entries')
 
         projects_by_path = {}
         for entry in self.entries:
             project_path = project_template.format(**entry)
-
             if project := projects_by_path.get(project_path):
                 # We have seen the project before, but will return it only if
                 # we allow duplicates to be produced. Otherwise, move on.
@@ -187,7 +186,7 @@ class ActionEntries:
                 yield entry, project
 
             except gitlab.exceptions.GitlabGetError:
-                logger.warning(f"Project '{project_path}' not found.")
+                self.logger.warning(f"Project '{project_path}' not found.")
 
 
 class ActionEntriesParameter(Parameter):
@@ -208,7 +207,7 @@ class ActionEntriesParameter(Parameter):
         )
 
     def get_value(self, argument_name, glb, parsed_options):
-        logger = logging.getLogger('gitlab-entries')
+        logger = logging.getLogger('action-entries')
         with open(parsed_options.entries_csv) as entries_csv:
             entries = csv.DictReader(entries_csv)
             logger.debug(f"Loaded entries with columns {entries.fieldnames}")
