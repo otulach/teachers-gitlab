@@ -595,7 +595,8 @@ def action_clone(
 def action_fork(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
+    login_column: LoginColumnActionParameter(),
     from_project: ActionParameter(
         'from',
         required=True,
@@ -618,7 +619,7 @@ def action_fork(
         'include-invalid-users',
         default=False,
         action='store_true',
-        help='For even for invalid (e.g. not found) users.'
+        help='Fork even for invalid (e.g. not found) users.'
     )
 ):
     """
@@ -627,22 +628,20 @@ def action_fork(
 
     from_project = mg.get_canonical_project(glb, from_project)
 
-    for user in users:
-        if hasattr(user, 'is_mock'):
-            logger.warning("User %s not found.", user.username)
-            if not include_nonexistent:
-                continue
+    for entry, user in entries.as_gitlab_users(glb, login_column):
+        if not user and not include_nonexistent:
+            # Skip forking for non-existent users
+            continue
 
-        to_full_path = to_project_template.format(**user.row)
+        user_name = user.username if user else entry.get(login_column)
+        to_full_path = to_project_template.format(**entry)
         to_namespace = os.path.dirname(to_full_path)
         to_name = os.path.basename(to_full_path)
 
         logger.info(
             "Forking %s to %s/%s for user %s",
             from_project.path_with_namespace,
-            to_namespace,
-            to_name,
-            user.username
+            to_namespace, to_name, user_name
         )
 
         to_project = mg.fork_project_idempotent(glb, from_project, to_namespace, to_name)
