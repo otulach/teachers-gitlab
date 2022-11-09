@@ -1042,7 +1042,8 @@ def action_members(
 def action_add_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
+    login_column: LoginColumnActionParameter(),
     dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
@@ -1060,19 +1061,20 @@ def action_add_member(
     Add members to multiple projects.
     """
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        logger.info(
-            "Adding %s (%s) to %s",
-            user.username, access_level.name, project.path_with_namespace
-        )
+    for entry, project in entries.as_gitlab_projects(glb, project_template, allow_duplicates=True):
+        if user := entries.as_gitlab_user(entry, glb, login_column):
+            logger.info(
+                "Adding %s (%s) to %s",
+                user.username, access_level.name, project.path_with_namespace
+            )
 
-        if dry_run:
-            continue
+            if dry_run:
+                continue
 
-        try:
-            _project_add_member(project, user, access_level, logger)
-        except gitlab.GitlabError as exp:
-            logger.error("- Failed to add member: %s", exp)
+            try:
+                _project_add_member(project, user, access_level, logger)
+            except gitlab.GitlabError as exp:
+                logger.error("- Failed to add member: %s", exp)
 
 
 def _project_add_member(project, user, access_level, logger):
