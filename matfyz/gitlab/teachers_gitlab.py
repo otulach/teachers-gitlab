@@ -211,69 +211,6 @@ class ActionEntriesParameter(Parameter):
             return ActionEntries(list(entries))
 
 
-class UserListParameter(Parameter):
-    """
-    Parameter annotation to mark list of users.
-    """
-
-    def __init__(self, has_to_be_gitlab_users=True):
-        Parameter.__init__(self)
-        self.mock_users = not has_to_be_gitlab_users
-
-    def register(self, argument_name, subparser):
-        subparser.add_argument(
-            '--users',
-            required=True,
-            dest='csv_users',
-            metavar='LIST.csv',
-            help='CSV with users.'
-        )
-        subparser.add_argument(
-            '--login-column',
-            dest='csv_users_login_column',
-            default='login',
-            metavar='COLUMN_NAME',
-            help='Column name with login information'
-        )
-
-    def get_gitlab_user(self, glb, user_login):
-        """
-        Find or mock a given GitLab user.
-        """
-        matching_users = glb.users.list(username=user_login)
-        if len(matching_users) == 0:
-            if self.mock_users:
-                # pylint: disable=too-few-public-methods
-                class UserMock:
-                    """
-                    Mock class when the login cannot be matched to actual user.
-                    """
-
-                    def __init__(self, name):
-                        self.username = name
-                        self.is_mock = True
-
-                return UserMock(user_login)
-            else:
-                return None
-        else:
-            return matching_users[0]
-
-    def get_value(self, argument_name, glb, parsed_options):
-        logger = logging.getLogger('gitlab-user-list')
-        with open(parsed_options.csv_users) as inp:
-            data = csv.DictReader(inp)
-            for user in data:
-                user_login = user.get(parsed_options.csv_users_login_column)
-                user_obj = self.get_gitlab_user(glb, user_login)
-                if not user_obj:
-                    logger.warning("User %s not found.", user_login)
-                    continue
-
-                user_obj.row = user
-                yield user_obj
-
-
 class ActionParameter(Parameter):
     """
     Parameter annotation to create corresponding CLI option.
