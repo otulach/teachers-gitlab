@@ -1488,11 +1488,10 @@ def action_deadline_commits(
     Get last commits before deadline.
     """
 
-    commit_filter = get_commit_author_email_filter(blacklist)
-
     output = open(output_filename, 'w') if output_filename else sys.stdout
     print(output_header, file=output)
 
+    commit_filter = get_commit_author_email_filter(blacklist)
     for entry, project in entries.as_gitlab_projects(glb, project_template):
         prefer_tag = prefer_tag_template.format(**entry) if prefer_tag_template else None
         branch = branch_template.format(**entry)
