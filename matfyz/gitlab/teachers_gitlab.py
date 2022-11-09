@@ -1206,13 +1206,13 @@ def action_put_file(
         metavar='PROJECT_PATH_WITH_FORMAT',
         help='Project path, formatted from CSV columns.'
     ),
-    from_file_template: ActionParameter(
+    local_file_template: ActionParameter(
         'from',
         required=True,
         metavar='LOCAL_FILE_PATH_WITH_FORMAT',
         help='Local file path, formatted from CSV columns.'
     ),
-    to_file_template: ActionParameter(
+    remote_file_template: ActionParameter(
         'to',
         required=True,
         metavar='REMOTE_FILE_PATH_WITH_FORMAT',
@@ -1258,18 +1258,18 @@ def action_put_file(
         return
 
     for entry, project in entries.as_gitlab_projects(glb, project_template):
-        to_file = to_file_template.format(**entry)
+        remote_file = remote_file_template.format(**entry)
         extras = {
-            'target_filename': to_file,
+            'target_filename': remote_file,
         }
         commit_message = commit_message_template.format(GL=extras, **entry)
 
-        from_file = from_file_template.format(**entry)
+        local_file = local_file_template.format(**entry)
         try:
-            from_file_content = pathlib.Path(from_file).read_text()
+            local_file_content = pathlib.Path(local_file).read_text()
         except FileNotFoundError:
             if skip_missing_file:
-                logger.error("Skipping %s as %s is missing.", project.path_with_namespace, from_file)
+                logger.error("Skipping %s as %s is missing.", project.path_with_namespace, local_file)
                 continue
             else:
                 raise
@@ -1277,10 +1277,10 @@ def action_put_file(
         commit_needed = force_commit
         already_exists = False
         if not force_commit:
-            current_content = mg.get_file_contents(glb, project, branch, to_file)
-            already_exists = current_content is not None
+            remote_file_content = mg.get_file_contents(glb, project, branch, remote_file)
+            already_exists = remote_file_content is not None
             if already_exists:
-                commit_needed = current_content != from_file_content.encode('utf-8')
+                commit_needed = remote_file_content != local_file_content.encode('utf-8')
             else:
                 commit_needed = True
 
@@ -1288,28 +1288,20 @@ def action_put_file(
             if already_exists and only_once:
                 logger.info(
                     "Not overwriting %s at %s.",
-                    from_file,
-                    project.path_with_namespace
+                    local_file, project.path_with_namespace
                 )
             else:
                 logger.info(
                     "Uploading %s to %s as %s",
-                    from_file,
-                    project.path_with_namespace,
-                    to_file
+                    local_file, project.path_with_namespace, remote_file
                 )
             if not dry_run:
                 mg.put_file(
-                    glb,
-                    project,
-                    branch,
-                    to_file,
-                    from_file_content,
-                    not only_once,
-                    commit_message
+                    glb, project, branch, remote_file,
+                    local_file_content, not only_once, commit_message
                 )
         else:
-            logger.info("No change in %s at %s.", from_file, project.path_with_namespace)
+            logger.info("No change in %s at %s.", local_file, project.path_with_namespace)
 
 
 @register_command('get-last-pipeline')
