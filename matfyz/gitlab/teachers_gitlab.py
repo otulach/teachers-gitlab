@@ -552,7 +552,7 @@ def action_clone(
         metavar='BRANCH',
         help='Branch to clone, defaults to master.'
     ),
-    commit: ActionParameter(
+    commit_template: ActionParameter(
         'commit',
         default=None,
         metavar='COMMIT_WITH_FORMAT',
@@ -579,8 +579,8 @@ def action_clone(
 
     commit_filter = get_commit_author_email_filter(blacklist)
     for entry, project in entries.as_gitlab_projects(glb, project_template):
-        if commit:
-            last_commit = project.commits.get(commit.format(**entry))
+        if commit_template:
+            last_commit = project.commits.get(commit_template.format(**entry))
         else:
             last_commit = mg.get_commit_before_deadline(
                 glb, project, deadline, branch, commit_filter
@@ -1383,7 +1383,7 @@ def action_get_pipeline_at_commit(
         metavar='PROJECT_PATH_WITH_FORMAT',
         help='Project path, formatted from CSV columns.'
     ),
-    commit: ActionParameter(
+    commit_template: ActionParameter(
         'commit',
         default=None,
         metavar='COMMIT_WITH_FORMAT',
@@ -1397,7 +1397,7 @@ def action_get_pipeline_at_commit(
 
     result = {}
     for entry, project in entries.as_gitlab_projects(glb, project_template):
-        commit_sha = commit.format(**entry) if commit else None
+        commit_sha = commit_template.format(**entry) if commit_template else None
 
         found_commit = False
         found_pipeline = None
