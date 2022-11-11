@@ -741,7 +741,7 @@ def action_create_tag(
         'ref',
         required=True,
         metavar='GIT_BRANCH_OR_COMMIT_WITH_TEMPLATE',
-        help='Git branch name (tip) or commit to tag.'
+        help='Git branch name (tip) or commit to tag, formatted from CSV columns.'
     ),
     commit_message_template: ActionParameter(
         'message',
@@ -926,11 +926,11 @@ def action_members(
     """
 
     project = mg.get_canonical_project(glb, project)
+    members = project.members_all if inherited else project.members
 
     print('login,name')
-    members = project.members_all if inherited else project.members
-    for member in members.list(all=True):
-        print('{},{}'.format(member.username, member.name))
+    for member in members.list(all=True, iterator=True):
+        print(f"{member.username},{member.name}")
 
 
 @register_command('add-member')
@@ -1058,20 +1058,20 @@ def action_get_file(
     remote_file_template: ActionParameter(
         'remote-file',
         required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns..'
+        metavar='REMOTE_FILE_PATH_WITH_FORMAT',
+        help='Remote file path, formatted from CSV columns..'
     ),
     local_file_template: ActionParameter(
         'local-file',
         required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
+        metavar='LOCAL_FILE_PATH_WITH_FORMAT',
+        help='Local file path, formatted from CSV columns.'
     ),
     branch: ActionParameter(
         'branch',
         default='master',
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
+        metavar='BRANCH_WITH_FORMAT',
+        help='Repository branch, formatted from CSV columns.'
     ),
     deadline: DateTimeActionParameter(
         'deadline',
@@ -1260,15 +1260,15 @@ def action_get_last_pipeline(
     result = {}
     pipeline_states_only = []
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        pipelines = project.pipelines.list()
-        if len(pipelines) == 0:
+        pipelines = project.pipelines.list(iterator=True)
+        last_pipeline = next(pipelines, None)
+
+        if not last_pipeline:
             result[project.path_with_namespace] = {
                 "status": "none"
             }
             pipeline_states_only.append("none")
             continue
-
-        last_pipeline = pipelines[0]
 
         entry = {
             "status": last_pipeline.status,
@@ -1278,7 +1278,7 @@ def action_get_last_pipeline(
         }
         pipeline_states_only.append(last_pipeline.status)
 
-        for job in last_pipeline.jobs.list():
+        for job in last_pipeline.jobs.list(iterator=True):
             entry["jobs"].append({
                 "status": job.status,
                 "id": job.id,
@@ -1292,7 +1292,7 @@ def action_get_last_pipeline(
         states_len = len(pipeline_states_only)
         for state, count in summary_by_overall_status.most_common():
             print("{}: {} ({:.0f}%)".format(state, count, 100 * count / states_len))
-        print("total: {}".format(states_len))
+        print(f"total: {states_len}")
     else:
         print(json.dumps(result, indent=4))
 
@@ -1311,30 +1311,26 @@ def action_get_pipeline_at_commit(
         'commit',
         default=None,
         metavar='COMMIT_WITH_FORMAT',
-        help='Commit to read pipeline status at.'
+        help='Commit to read pipeline status at, formatted from CSV columns.'
     ),
 ):
     """
-    Get pipeline status of multiple projects at or prior to specified commit, ignoring skipped pipelines.
+    Get pipeline status of multiple projects at or prior to specified
+    commit while ignoring skipped pipelines.
     """
 
     result = {}
     for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        pipelines = project.pipelines.list()
-
-        if commit:
-            commit_sha = commit.format(**user.row)
-        else:
-            commit_sha = None
+        commit_sha = commit.format(**user.row) if commit else None
 
         found_commit = False
         found_pipeline = None
-
-        for pipeline in pipelines:
+        for pipeline in project.pipelines.list(iterator=True):
             if not commit_sha:
                 found_commit = True
             elif pipeline.sha == commit_sha:
                 found_commit = True
+
             if not found_commit:
                 continue
 
@@ -1357,7 +1353,7 @@ def action_get_pipeline_at_commit(
                         "id": job.id,
                         "name": job.name,
                     }
-                    for job in found_pipeline.jobs.list()
+                    for job in found_pipeline.jobs.list(iterator=True)
                 ],
             }
 
@@ -1424,13 +1420,9 @@ def action_deadline_commits(
     Get last commits before deadline.
     """
 
-    if output_filename:
-        output = open(output_filename, 'w')
-    else:
-        output = sys.stdout
-
     commit_filter = get_commit_author_email_filter(blacklist)
 
+    output = open(output_filename, 'w') if output_filename else sys.stdout
     print(output_header, file=output)
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
@@ -1472,7 +1464,7 @@ def action_commit_stats(
 
     result = []
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        commits = project.commits.list(all=True, as_list=False)
+        commits = project.commits.list(all=True, iterator=True)
         commit_details = {}
         for c in commits:
             info = project.commits.get(c.id)
