@@ -114,67 +114,101 @@ class LoggerParameter(Parameter):
         return logging.getLogger(parsed_options.command_name_)
 
 
-class UserListParameter(Parameter):
-    """
-    Parameter annotation to mark list of users.
-    """
+class ActionEntries:
+    def __init__(self, entries: list):
+        self.entries = entries
+        self.logger = logging.getLogger('action-entries')
 
-    def __init__(self, has_to_be_gitlab_users=True):
+    def as_gitlab_user(self, entry, glb: gitlab.client.Gitlab, login_column: str):
+        if user_login := entry.get(login_column):
+            matching_users = glb.users.list(username=user_login, iterator=True)
+            if user_object := next(matching_users, None):
+                return user_object
+            else:
+                self.logger.warning(f"User {user_login} not found.")
+        else:
+            self.logger.error(f"Missing or empty '{login_column}' in {entry}.")
+
+        # No corresponding user for the entry.
+        return None
+
+    def as_gitlab_users(self, glb: gitlab.client.Gitlab, login_column: str):
+        """
+        Converts entries to GitLab users.
+
+        Each entry is converted to a tuple (entry, user), with the user
+        login obtained from entry login column. For users that do not
+        exist, None is returned and a warning message is printed.
+
+        :param glb: GitLab instance to use
+        :param login_column: name of the entry column containing user login
+        :return: generator of (entry, user)
+        """
+        for entry in self.entries:
+            yield entry, self.as_gitlab_user(entry, glb, login_column)
+
+    def as_gitlab_projects(
+        self, glb: gitlab.client.Gitlab, project_template: str,
+        allow_duplicates: bool = False
+    ):
+        """
+        Converts entries to GitLab projects.
+
+        Each entry is converted to a tuple (entry, project), with the project
+        path obtained by formatting :project_template: using entry data.
+        For projects that cannot be found, None is returned and a warning
+        message is printed.
+
+        :param glb: GitLab instance to use
+        :param project_template: template for generating project names using entry data
+        :param allow_duplicates: whether to return duplicate projects, defaults to False
+        :return: generator of (entry, project)
+        """
+
+        projects_by_path = {}
+        for entry in self.entries:
+            project_path = project_template.format(**entry)
+            if project := projects_by_path.get(project_path):
+                # We have seen the project before, but will return it only if
+                # we allow duplicates to be produced. Otherwise, move on.
+                if allow_duplicates:
+                    yield entry, project
+
+                continue
+
+            # We have not seen the project before, look it up.
+            try:
+                project = mg.get_canonical_project(glb, project_path)
+                projects_by_path[project_path] = project
+                yield entry, project
+
+            except gitlab.exceptions.GitlabGetError:
+                self.logger.warning(f"Project '{project_path}' not found.")
+
+
+class ActionEntriesParameter(Parameter):
+    """
+    Parameter annotation to mark action entries for template expansion. If the
+    entries represent users, they must contain a column with user login.
+    """
+    def __init__(self):
         Parameter.__init__(self)
-        self.mock_users = not has_to_be_gitlab_users
 
     def register(self, argument_name, subparser):
         subparser.add_argument(
-            '--users',
+            '--users', '--entries',
             required=True,
-            dest='csv_users',
+            dest='entries_csv',
             metavar='LIST.csv',
-            help='CSV with users.'
+            help='CSV with entries on which to perform an action'
         )
-        subparser.add_argument(
-            '--login-column',
-            dest='csv_users_login_column',
-            default='login',
-            metavar='COLUMN_NAME',
-            help='Column name with login information'
-        )
-
-    def get_gitlab_user(self, glb, user_login):
-        """
-        Find or mock a given GitLab user.
-        """
-        matching_users = glb.users.list(username=user_login)
-        if len(matching_users) == 0:
-            if self.mock_users:
-                # pylint: disable=too-few-public-methods
-                class UserMock:
-                    """
-                    Mock class when the login cannot be matched to actual user.
-                    """
-
-                    def __init__(self, name):
-                        self.username = name
-                        self.is_mock = True
-
-                return UserMock(user_login)
-            else:
-                return None
-        else:
-            return matching_users[0]
 
     def get_value(self, argument_name, glb, parsed_options):
-        logger = logging.getLogger('gitlab-user-list')
-        with open(parsed_options.csv_users) as inp:
-            data = csv.DictReader(inp)
-            for user in data:
-                user_login = user.get(parsed_options.csv_users_login_column)
-                user_obj = self.get_gitlab_user(glb, user_login)
-                if not user_obj:
-                    logger.warning("User %s not found.", user_login)
-                    continue
-
-                user_obj.row = user
-                yield user_obj
+        logger = logging.getLogger('action-entries')
+        with open(parsed_options.entries_csv) as entries_csv:
+            entries = csv.DictReader(entries_csv)
+            logger.debug(f"Loaded entries with columns {entries.fieldnames}")
+            return ActionEntries(list(entries))
 
 
 class ActionParameter(Parameter):
@@ -224,6 +258,20 @@ class DryRunActionParameter(ActionParameter):
             default=False,
             action='store_true',
             help='Simulate but do not make any real changes.'
+        )
+
+
+class LoginColumnActionParameter(ActionParameter):
+    """
+    Parameter annotation to create an option for specifying login column.
+    """
+    def __init__(self):
+        ActionParameter.__init__(
+            self,
+            'login-column',
+            default='login',
+            metavar='COLUMN_NAME',
+            help='Column name with user login name.'
         )
 
 
@@ -377,40 +425,11 @@ class CommandParser:
         )
 
 
-def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=True):
-    """
-    Convert list of users to list of projects.
-
-    List of users (e.g. from UserListParameter) is converted to
-    a tuple of user and project, formatted according to given
-    project template.
-
-    Unknown projects are skipped, warning message is printed.
-
-    Returns a generator (yields).
-    """
-
-    logger = logging.getLogger('gitlab-project-list')
-    processed_projects = {}
-    for user in users:
-        project_path = project_template.format(**user.row)
-
-        # Skip already seen projects when needed
-        if (not allow_duplicates) and (project_path in processed_projects):
-            continue
-        processed_projects[project_path] = True
-
-        try:
-            project = mg.get_canonical_project(glb, project_path)
-            yield user, project
-        except gitlab.exceptions.GitlabGetError:
-            logger.warning("Project %s not found.", project_path)
-            continue
-
-
 @register_command('accounts')
 def action_accounts(
-    users: UserListParameter(False),
+    glb: GitlabInstanceParameter(),
+    entries: ActionEntriesParameter(),
+    login_column: LoginColumnActionParameter(),
     show_summary: ActionParameter(
         'show-summary',
         default=False,
@@ -421,20 +440,12 @@ def action_accounts(
     """
     List accounts that were not found.
     """
-    logger = logging.getLogger('gitlab-accounts')
-    users_total = 0
-    users_not_found = 0
-    for user in users:
-        users_total = users_total + 1
-        if hasattr(user, 'is_mock'):
-            logger.warning("User %s not found.", user.username)
-            users_not_found = users_not_found + 1
-            continue
+    users = list(entries.as_gitlab_users(glb, login_column))
     if show_summary:
+        entries_total = len(users)
+        users_found = len([u for _, u in users if u])
         print('Total: {}, Not-found: {}, Ok: {}'.format(
-            users_total,
-            users_not_found,
-            users_total - users_not_found
+            entries_total, entries_total - users_found, users_found
         ))
 
 
@@ -459,7 +470,7 @@ def get_commit_author_email_filter(blacklist):
 @register_command('clone')
 def action_clone(
     glb: GitlabInstanceParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -478,7 +489,7 @@ def action_clone(
         metavar='BRANCH',
         help='Branch to clone, defaults to master.'
     ),
-    commit: ActionParameter(
+    commit_template: ActionParameter(
         'commit',
         default=None,
         metavar='COMMIT_WITH_FORMAT',
@@ -504,17 +515,15 @@ def action_clone(
     # FIXME: commit and deadline are mutually exclusive
 
     commit_filter = get_commit_author_email_filter(blacklist)
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project = mg.get_canonical_project(glb, project_template.format(**user.row))
-        local_path = local_path_template.format(**user.row)
-
-        if commit:
-            last_commit = project.commits.get(commit.format(**user.row))
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        if commit_template:
+            last_commit = project.commits.get(commit_template.format(**entry))
         else:
             last_commit = mg.get_commit_before_deadline(
                 glb, project, deadline, branch, commit_filter
             )
 
+        local_path = local_path_template.format(**entry)
         mg.clone_or_fetch(glb, project, local_path)
         mg.reset_to_commit(local_path, last_commit.id)
 
@@ -523,7 +532,8 @@ def action_clone(
 def action_fork(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
+    login_column: LoginColumnActionParameter(),
     from_project: ActionParameter(
         'from',
         required=True,
@@ -546,7 +556,7 @@ def action_fork(
         'include-invalid-users',
         default=False,
         action='store_true',
-        help='For even for invalid (e.g. not found) users.'
+        help='Fork even for invalid (e.g. not found) users.'
     )
 ):
     """
@@ -555,22 +565,20 @@ def action_fork(
 
     from_project = mg.get_canonical_project(glb, from_project)
 
-    for user in users:
-        if hasattr(user, 'is_mock'):
-            logger.warning("User %s not found.", user.username)
-            if not include_nonexistent:
-                continue
+    for entry, user in entries.as_gitlab_users(glb, login_column):
+        if not user and not include_nonexistent:
+            # Skip forking for non-existent users
+            continue
 
-        to_full_path = to_project_template.format(**user.row)
+        user_name = user.username if user else entry.get(login_column)
+        to_full_path = to_project_template.format(**entry)
         to_namespace = os.path.dirname(to_full_path)
         to_name = os.path.basename(to_full_path)
 
         logger.info(
             "Forking %s to %s/%s for user %s",
             from_project.path_with_namespace,
-            to_namespace,
-            to_name,
-            user.username
+            to_namespace, to_name, user_name
         )
 
         to_project = mg.fork_project_idempotent(glb, from_project, to_namespace, to_name)
@@ -584,7 +592,7 @@ def action_fork(
 def action_protect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -622,7 +630,7 @@ def action_protect_branch(
     Set branch protection on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         logger.info(
             "Protecting branch '%s' in %s",
             branch_name, project.path_with_namespace
@@ -675,7 +683,7 @@ def _project_protect_branch(project, branch_name, merge_access_level, push_acces
 def action_unprotect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -693,7 +701,7 @@ def action_unprotect_branch(
     Unprotect branch on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         logger.info(
             "Unprotecting branch '%s' in %s",
             branch_name, project.path_with_namespace
@@ -724,7 +732,7 @@ def _project_get_protected_branch(project, branch_name):
 def action_create_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -754,8 +762,8 @@ def action_create_tag(
     Create a tag on a given commit or branch tip.
     """
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        ref_name = ref_name_template.format(**user.row)
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        ref_name = ref_name_template.format(**entry)
         params = {
             'tag_name': tag_name,
             'ref': ref_name,
@@ -765,7 +773,7 @@ def action_create_tag(
             extras = {
                 'tag': tag_name,
             }
-            params['message'] = commit_message_template.format(GL=extras, **user.row)
+            params['message'] = commit_message_template.format(GL=extras, **entry)
 
         logger.info("Creating tag %s on %s in %s", tag_name, ref_name, project.path_with_namespace)
         try:
@@ -781,7 +789,7 @@ def action_create_tag(
 def action_protect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -816,7 +824,7 @@ def action_protect_tag(
     Set tag protection on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         logger.info(
             "Protecting tag '%s' in %s",
             tag_name, project.path_with_namespace
@@ -860,7 +868,7 @@ def _project_protect_tag(project, tag_name, create_access_level, logger):
 def action_unprotect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -878,7 +886,7 @@ def action_unprotect_tag(
     Unset tag protection on multiple projects.
     """
 
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         logger.info(
             "Unprotecting tag '%s' in %s",
             tag_name, project.path_with_namespace
@@ -937,7 +945,8 @@ def action_members(
 def action_add_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
+    login_column: LoginColumnActionParameter(),
     dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
@@ -955,19 +964,20 @@ def action_add_member(
     Add members to multiple projects.
     """
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        logger.info(
-            "Adding %s (%s) to %s",
-            user.username, access_level.name, project.path_with_namespace
-        )
+    for entry, project in entries.as_gitlab_projects(glb, project_template, allow_duplicates=True):
+        if user := entries.as_gitlab_user(entry, glb, login_column):
+            logger.info(
+                "Adding %s (%s) to %s",
+                user.username, access_level.name, project.path_with_namespace
+            )
 
-        if dry_run:
-            continue
+            if dry_run:
+                continue
 
-        try:
-            _project_add_member(project, user, access_level, logger)
-        except gitlab.GitlabError as exp:
-            logger.error("- Failed to add member: %s", exp)
+            try:
+                _project_add_member(project, user, access_level, logger)
+            except gitlab.GitlabError as exp:
+                logger.error("- Failed to add member: %s", exp)
 
 
 def _project_add_member(project, user, access_level, logger):
@@ -1002,7 +1012,8 @@ def _project_add_member(project, user, access_level, logger):
 def action_remove_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
+    login_column: LoginColumnActionParameter(),
     dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
@@ -1015,18 +1026,19 @@ def action_remove_member(
     Remove members from multiple projects.
     """
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        logger.info(
-            "Removing %s from %s", user.username, project.path_with_namespace
-        )
+    for entry, project in entries.as_gitlab_projects(glb, project_template, allow_duplicates=True):
+        if user := entries.as_gitlab_user(entry, glb, login_column):
+            logger.info(
+                "Removing %s from %s", user.username, project.path_with_namespace
+            )
 
-        if dry_run:
-            continue
+            if dry_run:
+                continue
 
-        try:
-            _project_remove_member(project, user, logger)
-        except gitlab.GitlabError as exp:
-            logger.error("- Failed to remove member: %s", exp)
+            try:
+                _project_remove_member(project, user, logger)
+            except gitlab.GitlabError as exp:
+                logger.error("- Failed to remove member: %s", exp)
 
 
 def _project_remove_member(project, user, logger):
@@ -1048,7 +1060,7 @@ def _project_get_member(project, user):
 def action_get_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1091,10 +1103,7 @@ def action_get_file(
     """
 
     commit_filter = get_commit_author_email_filter(blacklist)
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        remote_file = remote_file_template.format(**user.row)
-        local_file = local_file_template.format(**user.row)
-
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
         try:
             last_commit = mg.get_commit_before_deadline(
                 glb, project, deadline, branch, commit_filter
@@ -1103,6 +1112,7 @@ def action_get_file(
             logger.error("No matching commit in %s", project.path_with_namespace)
             continue
 
+        remote_file = remote_file_template.format(**entry)
         current_content = mg.get_file_contents(glb, project, last_commit.id, remote_file)
         if current_content is None:
             logger.error(
@@ -1114,6 +1124,8 @@ def action_get_file(
                 "File %s in %s has %dB.",
                 remote_file, project.path_with_namespace, len(current_content)
             )
+
+            local_file = local_file_template.format(**entry)
             with open(local_file, "wb") as f:
                 f.write(current_content)
 
@@ -1122,7 +1134,7 @@ def action_get_file(
 def action_put_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
@@ -1130,13 +1142,13 @@ def action_put_file(
         metavar='PROJECT_PATH_WITH_FORMAT',
         help='Project path, formatted from CSV columns.'
     ),
-    from_file_template: ActionParameter(
+    local_file_template: ActionParameter(
         'from',
         required=True,
         metavar='LOCAL_FILE_PATH_WITH_FORMAT',
         help='Local file path, formatted from CSV columns.'
     ),
-    to_file_template: ActionParameter(
+    remote_file_template: ActionParameter(
         'to',
         required=True,
         metavar='REMOTE_FILE_PATH_WITH_FORMAT',
@@ -1181,19 +1193,19 @@ def action_put_file(
         logger.error("--force-commit and --once together does not make sense, aborting.")
         return
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        from_file = from_file_template.format(**user.row)
-        to_file = to_file_template.format(**user.row)
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        remote_file = remote_file_template.format(**entry)
         extras = {
-            'target_filename': to_file,
+            'target_filename': remote_file,
         }
-        commit_message = commit_message_template.format(GL=extras, **user.row)
+        commit_message = commit_message_template.format(GL=extras, **entry)
 
+        local_file = local_file_template.format(**entry)
         try:
-            from_file_content = pathlib.Path(from_file).read_text()
+            local_file_content = pathlib.Path(local_file).read_text()
         except FileNotFoundError:
             if skip_missing_file:
-                logger.error("Skipping %s as %s is missing.", project.path_with_namespace, from_file)
+                logger.error("Skipping %s as %s is missing.", project.path_with_namespace, local_file)
                 continue
             else:
                 raise
@@ -1201,10 +1213,10 @@ def action_put_file(
         commit_needed = force_commit
         already_exists = False
         if not force_commit:
-            current_content = mg.get_file_contents(glb, project, branch, to_file)
-            already_exists = current_content is not None
+            remote_file_content = mg.get_file_contents(glb, project, branch, remote_file)
+            already_exists = remote_file_content is not None
             if already_exists:
-                commit_needed = current_content != from_file_content.encode('utf-8')
+                commit_needed = remote_file_content != local_file_content.encode('utf-8')
             else:
                 commit_needed = True
 
@@ -1212,34 +1224,26 @@ def action_put_file(
             if already_exists and only_once:
                 logger.info(
                     "Not overwriting %s at %s.",
-                    from_file,
-                    project.path_with_namespace
+                    local_file, project.path_with_namespace
                 )
             else:
                 logger.info(
                     "Uploading %s to %s as %s",
-                    from_file,
-                    project.path_with_namespace,
-                    to_file
+                    local_file, project.path_with_namespace, remote_file
                 )
             if not dry_run:
                 mg.put_file(
-                    glb,
-                    project,
-                    branch,
-                    to_file,
-                    from_file_content,
-                    not only_once,
-                    commit_message
+                    glb, project, branch, remote_file,
+                    local_file_content, not only_once, commit_message
                 )
         else:
-            logger.info("No change in %s at %s.", from_file, project.path_with_namespace)
+            logger.info("No change in %s at %s.", local_file, project.path_with_namespace)
 
 
 @register_command('get-last-pipeline')
 def action_get_last_pipeline(
     glb: GitlabInstanceParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1259,7 +1263,7 @@ def action_get_last_pipeline(
 
     result = {}
     pipeline_states_only = []
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         pipelines = project.pipelines.list(iterator=True)
         last_pipeline = next(pipelines, None)
 
@@ -1300,14 +1304,14 @@ def action_get_last_pipeline(
 @register_command('get-pipeline-at-commit')
 def action_get_pipeline_at_commit(
     glb: GitlabInstanceParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
         metavar='PROJECT_PATH_WITH_FORMAT',
         help='Project path, formatted from CSV columns.'
     ),
-    commit: ActionParameter(
+    commit_template: ActionParameter(
         'commit',
         default=None,
         metavar='COMMIT_WITH_FORMAT',
@@ -1320,8 +1324,8 @@ def action_get_pipeline_at_commit(
     """
 
     result = {}
-    for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        commit_sha = commit.format(**user.row) if commit else None
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        commit_sha = commit_template.format(**entry) if commit_template else None
 
         found_commit = False
         found_pipeline = None
@@ -1366,7 +1370,7 @@ def action_get_pipeline_at_commit(
 def action_deadline_commits(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
-    users: UserListParameter(False),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1420,14 +1424,13 @@ def action_deadline_commits(
     Get last commits before deadline.
     """
 
-    commit_filter = get_commit_author_email_filter(blacklist)
-
     output = open(output_filename, 'w') if output_filename else sys.stdout
     print(output_header, file=output)
 
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        prefer_tag = prefer_tag_template.format(**user.row) if prefer_tag_template else None
-        branch = branch_template.format(**user.row)
+    commit_filter = get_commit_author_email_filter(blacklist)
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        prefer_tag = prefer_tag_template.format(**entry) if prefer_tag_template else None
+        branch = branch_template.format(**entry)
         try:
             last_commit = mg.get_commit_before_deadline(
                 glb, project, deadline, branch, commit_filter, prefer_tag
@@ -1440,7 +1443,7 @@ def action_deadline_commits(
             last_commit = CommitMock('0000000000000000000000000000000000000000')
 
         logger.debug("%s at %s", project.path_with_namespace, last_commit.id)
-        line = output_template.format(commit=last_commit, **user.row)
+        line = output_template.format(commit=last_commit, **entry)
         print(line, file=output)
 
     if output_filename:
@@ -1450,7 +1453,7 @@ def action_deadline_commits(
 @register_command('commit-stats')
 def action_commit_stats(
     glb: GitlabInstanceParameter(),
-    users: UserListParameter(),
+    entries: ActionEntriesParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1463,7 +1466,7 @@ def action_commit_stats(
     """
 
     result = []
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+    for _, project in entries.as_gitlab_projects(glb, project_template):
         commits = project.commits.list(all=True, iterator=True)
         commit_details = {}
         for c in commits:
