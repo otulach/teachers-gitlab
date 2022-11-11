@@ -40,7 +40,7 @@ def register_command(name):
 
     def decorator(func):
         """
-        Actual decorator (because we ned to process arguments).
+        Actual decorator (because we need to process arguments).
         """
         _registered_commands.append({
             'name': name,
@@ -78,6 +78,7 @@ class Parameter:
         Callback to add itself to the argparse subparser.
 
         :param argument_name: Used for dest in argparse.
+        :param subparser: Parser to register arguments with.
         """
 
     def get_value(self, argument_name, glb, parsed_options):
@@ -474,7 +475,7 @@ def action_fork(
     )
 ):
     """
-    Fork one repo multiple times.
+    Fork one repository multiple times.
     """
 
     from_project = mg.get_canonical_project(glb, from_project)
@@ -505,7 +506,7 @@ def action_fork(
 
 
 @register_command('protect')
-def action_set_branch_protection(
+def action_protect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(False),
@@ -576,9 +577,8 @@ def action_unprotect_branch(
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         branch = project.branches.get(branch_name)
         logger.info(
-            "Unprotecting branch %s in %s",
-            branch.name,
-            project.path_with_namespace
+            "Unprotecting branch '%s' in %s",
+            branch.name, project.path_with_namespace
         )
         branch.unprotect()
 
@@ -641,7 +641,7 @@ def action_create_tag(
 
 
 @register_command('protect-tag')
-def action_set_tag_protection(
+def action_protect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(False),
@@ -674,36 +674,45 @@ def action_set_tag_protection(
     Set tag protection on multiple projects.
     """
 
-    access_level = gitlab.NO_ACCESS
+    create_access_level = gitlab.NO_ACCESS
     if developers_can_create:
-        access_level = gitlab.DEVELOPER_ACCESS
+        create_access_level = gitlab.DEVELOPER_ACCESS
     if maintainers_can_create:
-        access_level = gitlab.MAINTAINER_ACCESS
+        create_access_level = gitlab.MAINTAINER_ACCESS
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         logger.info(
-            "Protecting tag %s in %s",
-            tag_name,
-            project.path_with_namespace
+            "Protecting tag '%s' in %s",
+            tag_name, project.path_with_namespace
         )
+
+        # Protected tags cannot be modified and saved (they lack SaveMixin).
+        # They need to be deleted and created anew.
         try:
-            existing = project.protectedtags.get(tag_name)
-            existing_level = existing.create_access_levels[0]['access_level']
-            if existing_level == access_level:
+            protected_tag = project.protectedtags.get(tag_name)
+            existing_create_level = protected_tag.create_access_levels[0]['access_level']
+            if existing_create_level == create_access_level:
                 logger.debug("Skipping as it is already set.")
                 continue
-            logger.warning(" - Need to delete existing (access %d => %d) one first.", existing_level, access_level)
-            existing.delete()
+
+            logger.warning(
+                " - Need to delete existing (access %d => %d) one first.",
+                existing_create_level, create_access_level
+            )
+            protected_tag.delete()
+
         except gitlab.exceptions.GitlabGetError:
+            # There is no such protected tag.
             pass
+
         project.protectedtags.create({
             'name': tag_name,
-            'create_access_level': access_level
+            'create_access_level': create_access_level
         })
 
 
 @register_command('unprotect-tag')
-def action_unset_tag_protection(
+def action_unprotect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(False),
@@ -726,13 +735,13 @@ def action_unset_tag_protection(
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         logger.info(
-            "Unprotecting tag %s in %s",
-            tag_name,
-            project.path_with_namespace
+            "Unprotecting tag '%s' in %s",
+            tag_name, project.path_with_namespace
         )
         try:
-            existing = project.protectedtags.get(tag_name)
-            existing.delete()
+            protected_tag = project.protectedtags.get(tag_name)
+            protected_tag.delete()
+
         except gitlab.exceptions.GitlabGetError:
             logger.debug("Skipping as it is not protected.")
 
@@ -801,12 +810,12 @@ def action_add_member(
         raise Exception("Unsupported access level.")
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        project_path = project.path_with_namespace
+
         try:
             logger.info(
-                "Adding %s to %s (as %s)",
-                user.username,
-                project.path_with_namespace,
-                level
+                "Adding %s (as %s) to %s",
+                user.username, level, project_path
             )
             if not dry_run:
                 project.members.create({
@@ -826,11 +835,8 @@ def action_add_member(
                     member.save()
             else:
                 logger.error(
-                    "Failed to add %s to %s (as %s): %s",
-                    user.username,
-                    project.path_with_namespace,
-                    level,
-                    exp
+                    "Failed to add %s (as %s) to %s: %s",
+                    user.username, level, project_path, exp
                 )
 
 
@@ -995,7 +1001,7 @@ def action_put_file(
 
         try:
             from_file_content = pathlib.Path(from_file).read_text()
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             if skip_missing_file:
                 logger.error("Skipping %s as %s is missing.", project.path_with_namespace, from_file)
                 continue
