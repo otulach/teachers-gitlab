@@ -12,21 +12,24 @@ student and massively fork, clone or upload files to them.
 """
 
 import argparse
-import csv
 import collections
+import csv
+import http
 import json
 import locale
 import logging
-import sys
-import http
 import os
 import pathlib
 import re
+import sys
 import time
+
 import gitlab
+
 import matfyz.gitlab.utils as mg
 
 _registered_commands = []
+
 
 def register_command(name):
     """
@@ -43,13 +46,17 @@ def register_command(name):
             'name': name,
             'func': func
         })
+
         def wrapper(*args, **kwargs):
             """
             Wrapper calling the original function.
             """
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
+
 
 def get_registered_commands():
     """
@@ -62,6 +69,7 @@ class Parameter:
     """
     Base class for parameter annotation.
     """
+
     def __init__(self):
         pass
 
@@ -81,6 +89,7 @@ class Parameter:
         :param parsed_options: Object of parsed option from argparse.
         """
 
+
 class GitlabInstanceParameter(Parameter):
     """
     Parameter annotation to mark GitLab instance object.
@@ -91,6 +100,7 @@ class GitlabInstanceParameter(Parameter):
 
     def get_value(self, argument_name, glb, parsed_options):
         return glb
+
 
 class LoggerParameter(Parameter):
     """
@@ -103,10 +113,12 @@ class LoggerParameter(Parameter):
     def get_value(self, argument_name, glb, parsed_options):
         return logging.getLogger(parsed_options.command_name_)
 
+
 class UserListParameter(Parameter):
     """
     Parameter annotation to mark list of users.
     """
+
     def __init__(self, has_to_be_gitlab_users=True):
         Parameter.__init__(self)
         self.mock_users = not has_to_be_gitlab_users
@@ -139,9 +151,11 @@ class UserListParameter(Parameter):
                     """
                     Mock class when the login cannot be matched to actual user.
                     """
+
                     def __init__(self, name):
                         self.username = name
                         self.is_mock = True
+
                 return UserMock(user_login)
             else:
                 return None
@@ -167,6 +181,7 @@ class DryRunParameter(Parameter):
     """
     Parameter annotation to mark switch for dry run.
     """
+
     def __init__(self):
         Parameter.__init__(self)
 
@@ -182,10 +197,12 @@ class DryRunParameter(Parameter):
     def get_value(self, argument_name, glb, parsed_options):
         return parsed_options.dry_run
 
+
 class ActionParameter(Parameter):
     """
     Parameter annotation to create corresponding CLI option.
     """
+
     def __init__(self, name, **kwargs):
         Parameter.__init__(self)
         self.name = name
@@ -201,10 +218,12 @@ class ActionParameter(Parameter):
     def get_value(self, argument_name, glb, parsed_options):
         return getattr(parsed_options, 'arg_' + argument_name)
 
+
 class CommandParser:
     """
     Wrapper for argparse for Teachers GitLab.
     """
+
     def __init__(self):
         self.args_common = argparse.ArgumentParser(add_help=False)
         self.args_common.add_argument(
@@ -289,6 +308,7 @@ class CommandParser:
             self.parsed_options.gitlab_config_file
         )
 
+
 def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=True):
     """
     Convert list of users to list of projects.
@@ -322,14 +342,14 @@ def as_existing_gitlab_projects(glb, users, project_template, allow_duplicates=T
 
 @register_command('accounts')
 def action_accounts(
-        users: UserListParameter(False),
-        show_summary: ActionParameter(
-            'show-summary',
-            default=False,
-            action='store_true',
-            help='Show summary numbers.'
-        )
-    ):
+    users: UserListParameter(False),
+    show_summary: ActionParameter(
+        'show-summary',
+        default=False,
+        action='store_true',
+        help='Show summary numbers.'
+    )
+):
     """
     List accounts that were not found.
     """
@@ -350,36 +370,109 @@ def action_accounts(
         ))
 
 
+@register_command('clone')
+def action_clone(
+    glb: GitlabInstanceParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    local_path_template: ActionParameter(
+        'to',
+        required=True,
+        metavar='LOCAL_PATH_WITH_FORMAT',
+        help='Local repository path, formatted from CSV columns.'
+    ),
+    branch: ActionParameter(
+        'branch',
+        default='master',
+        metavar='BRANCH',
+        help='Branch to clone, defaults to master.'
+    ),
+    commit: ActionParameter(
+        'commit',
+        default=None,
+        metavar='COMMIT_WITH_FORMAT',
+        help='Commit to reset to after clone.'
+    ),
+    deadline: ActionParameter(
+        'deadline',
+        default='now',
+        metavar='YYYY-MM-DDTHH:MM:SSZ',
+        help='Submission deadline (defaults to now).'
+    ),
+    blacklist: ActionParameter(
+        'blacklist',
+        default=None,
+        metavar='BLACKLIST',
+        help='Commit authors to ignore (regular expression).'
+    )
+):
+    """
+    Clone multiple repositories.
+    """
+
+    # FIXME: commit and deadline are mutually exclusive
+
+    if deadline == 'now':
+        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+
+    if blacklist:
+        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
+    else:
+        commit_filter = lambda commit: True
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        project = mg.get_canonical_project(glb, project_template.format(**user.row))
+        local_path = local_path_template.format(**user.row)
+
+        if commit:
+            last_commit = project.commits.get(commit.format(**user.row))
+        else:
+            last_commit = mg.get_commit_before_deadline(
+                glb,
+                project,
+                deadline,
+                branch,
+                commit_filter
+            )
+        mg.clone_or_fetch(glb, project, local_path)
+        mg.reset_to_commit(local_path, last_commit.id)
+
+
 @register_command('fork')
 def action_fork(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(False),
-        from_project: ActionParameter(
-            'from',
-            required=True,
-            metavar='REPO_PATH',
-            help='Parent repository path.'
-        ),
-        to_project_template: ActionParameter(
-            'to',
-            required=True,
-            metavar='REPO_PATH_WITH_FORMAT',
-            help='Target repository path, formatted from CSV columns.'
-        ),
-        hide_fork: ActionParameter(
-            'hide-fork',
-            default=False,
-            action='store_true',
-            help='Hide fork relationship.'
-        ),
-        include_nonexistent: ActionParameter(
-            'include-invalid-users',
-            default=False,
-            action='store_true',
-            help='For even for invalid (e.g. not found) users.'
-        )
-    ):
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(False),
+    from_project: ActionParameter(
+        'from',
+        required=True,
+        metavar='REPO_PATH',
+        help='Parent repository path.'
+    ),
+    to_project_template: ActionParameter(
+        'to',
+        required=True,
+        metavar='REPO_PATH_WITH_FORMAT',
+        help='Target repository path, formatted from CSV columns.'
+    ),
+    hide_fork: ActionParameter(
+        'hide-fork',
+        default=False,
+        action='store_true',
+        help='Hide fork relationship.'
+    ),
+    include_nonexistent: ActionParameter(
+        'include-invalid-users',
+        default=False,
+        action='store_true',
+        help='For even for invalid (e.g. not found) users.'
+    )
+):
     """
     Fork one repo multiple times.
     """
@@ -413,34 +506,34 @@ def action_fork(
 
 @register_command('protect')
 def action_set_branch_protection(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(False),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        branch_name: ActionParameter(
-            'branch',
-            required=True,
-            metavar='GIT_BRANCH',
-            help='Git branch name to set protection on.'
-        ),
-        developers_can_merge: ActionParameter(
-            'developers-can-merge',
-            default=False,
-            action='store_true',
-            help='Allow developers to merge into this branch.'
-        ),
-        developers_can_push: ActionParameter(
-            'developers-can-push',
-            default=False,
-            action='store_true',
-            help='Allow developers to merge into this branch.'
-        )
-    ):
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    branch_name: ActionParameter(
+        'branch',
+        required=True,
+        metavar='GIT_BRANCH',
+        help='Git branch name to set protection on.'
+    ),
+    developers_can_merge: ActionParameter(
+        'developers-can-merge',
+        default=False,
+        action='store_true',
+        help='Allow developers to merge into this branch.'
+    ),
+    developers_can_push: ActionParameter(
+        'developers-can-push',
+        default=False,
+        action='store_true',
+        help='Allow developers to merge into this branch.'
+    )
+):
     """
     Set branch protection on multiple projects.
     """
@@ -458,36 +551,125 @@ def action_set_branch_protection(
         )
 
 
+@register_command('unprotect')
+def action_unprotect_branch(
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    branch_name: ActionParameter(
+        'branch',
+        required=True,
+        metavar='GIT_BRANCH',
+        help='Git branch name to unprotect.'
+    )
+):
+    """
+    Unprotect branch on multiple projects.
+    """
+
+    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+        branch = project.branches.get(branch_name)
+        logger.info(
+            "Unprotecting branch %s in %s",
+            branch.name,
+            project.path_with_namespace
+        )
+        branch.unprotect()
+
+
+@register_command('create-tag')
+def action_create_tag(
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    tag_name: ActionParameter(
+        'tag',
+        required=True,
+        metavar='TAG_NAME',
+        help='Git tag name.'
+    ),
+    ref_name_template: ActionParameter(
+        'ref',
+        required=True,
+        metavar='GIT_BRANCH_OR_COMMIT_WITH_TEMPLATE',
+        help='Git branch name (tip) or commit to tag.'
+    ),
+    commit_message_template: ActionParameter(
+        'message',
+        default=None,
+        metavar='COMMIT_MESSAGE_WITH_FORMAT',
+        help='Commit message, formatted from CSV columns.'
+    ),
+):
+    """
+    Create a tag on a given commit or branch tip.
+    """
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        ref_name = ref_name_template.format(**user.row)
+        params = {
+            'tag_name': tag_name,
+            'ref': ref_name,
+        }
+
+        if commit_message_template:
+            extras = {
+                'tag': tag_name,
+            }
+            params['message'] = commit_message_template.format(GL=extras, **user.row)
+
+        logger.info("Creating tag %s on %s in %s", tag_name, ref_name, project.path_with_namespace)
+        try:
+            mg.create_tag(glb, project, params)
+        except gitlab.exceptions.GitlabCreateError as exp:
+            if (exp.response_code == http.HTTPStatus.BAD_REQUEST) and exp.error_message.endswith("already exists"):
+                pass
+            else:
+                raise
+
+
 @register_command('protect-tag')
 def action_set_tag_protection(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(False),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        tag_name: ActionParameter(
-            'tag',
-            required=True,
-            metavar='GIT_TAG',
-            help='Git tag name to set protection on.'
-        ),
-        developers_can_create: ActionParameter(
-            'developers-can-create',
-            default=False,
-            action='store_true',
-            help='Allow developers to create this tag.'
-        ),
-        maintainers_can_create: ActionParameter(
-            'maintainers-can-create',
-            default=False,
-            action='store_true',
-            help='Allow maintainers to create this tag.'
-        ),
-    ):
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    tag_name: ActionParameter(
+        'tag',
+        required=True,
+        metavar='GIT_TAG',
+        help='Git tag name to set protection on.'
+    ),
+    developers_can_create: ActionParameter(
+        'developers-can-create',
+        default=False,
+        action='store_true',
+        help='Allow developers to create this tag.'
+    ),
+    maintainers_can_create: ActionParameter(
+        'maintainers-can-create',
+        default=False,
+        action='store_true',
+        help='Allow maintainers to create this tag.'
+    ),
+):
     """
     Set tag protection on multiple projects.
     """
@@ -519,24 +701,25 @@ def action_set_tag_protection(
             'create_access_level': access_level
         })
 
+
 @register_command('unprotect-tag')
 def action_unset_tag_protection(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(False),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        tag_name: ActionParameter(
-            'tag',
-            required=True,
-            metavar='GIT_TAG',
-            help='Git tag name to unset protection on.'
-        ),
-    ):
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    tag_name: ActionParameter(
+        'tag',
+        required=True,
+        metavar='GIT_TAG',
+        help='Git tag name to unset protection on.'
+    ),
+):
     """
     Unset tag protection on multiple projects.
     """
@@ -553,109 +736,23 @@ def action_unset_tag_protection(
         except gitlab.exceptions.GitlabGetError:
             logger.debug("Skipping as it is not protected.")
 
-@register_command('unprotect')
-def action_unprotect_branch(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        branch_name: ActionParameter(
-            'branch',
-            required=True,
-            metavar='GIT_BRANCH',
-            help='Git branch name to unprotect.'
-        )
-    ):
-    """
-    Unprotect branch on multiple projects.
-    """
-
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        branch = project.branches.get(branch_name)
-        logger.info(
-            "Unprotecting branch %s in %s",
-            branch.name,
-            project.path_with_namespace
-        )
-        branch.unprotect()
-
-@register_command('create-tag')
-def action_create_tag(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(False),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        tag_name: ActionParameter(
-            'tag',
-            required=True,
-            metavar='TAG_NAME',
-            help='Git tag name.'
-        ),
-        ref_name_template: ActionParameter(
-            'ref',
-            required=True,
-            metavar='GIT_BRANCH_OR_COMMIT_WITH_TEMPLATE',
-            help='Git branch name (tip) or commit to tag.'
-        ),
-        commit_message_template: ActionParameter(
-            'message',
-            default=None,
-            metavar='COMMIT_MESSAGE_WITH_FORMAT',
-            help='Commit message, formatted from CSV columns.'
-        ),
-    ):
-    """
-    Create a tag on a given commit or branch tip.
-    """
-
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        ref_name = ref_name_template.format(**user.row)
-        params = {
-            'tag_name': tag_name,
-            'ref': ref_name,
-        }
-
-        if commit_message_template:
-            extras = {
-                'tag': tag_name,
-            }
-            params['message'] = commit_message_template.format(GL=extras, **user.row)
-
-        logger.info("Creating tag %s on %s in %s", tag_name, ref_name, project.path_with_namespace)
-        try:
-            mg.create_tag(glb, project, params)
-        except gitlab.exceptions.GitlabCreateError as exp:
-            if (exp.response_code == http.HTTPStatus.BAD_REQUEST) and exp.error_message.endswith("already exists"):
-                pass
-            else:
-                raise
 
 @register_command('get-members')
 def action_members(
-        glb: GitlabInstanceParameter(),
-        project: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH',
-            help='Project path.'
-        ),
-        inherited: ActionParameter(
-            'inherited',
-            default=False,
-            action='store_true',
-            help='Show inherited members.'
-        )
-    ):
+    glb: GitlabInstanceParameter(),
+    project: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH',
+        help='Project path.'
+    ),
+    inherited: ActionParameter(
+        'inherited',
+        default=False,
+        action='store_true',
+        help='Show inherited members.'
+    )
+):
     """
     Get members of a project.
     """
@@ -664,30 +761,30 @@ def action_members(
 
     print('login,name')
     members = project.members_all if inherited else project.members
-    for member in members.list (all = True):
+    for member in members.list(all=True):
         print('{},{}'.format(member.username, member.name))
 
 
 @register_command('add-member')
 def action_add_member(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(),
-        dry_run: DryRunParameter(),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        access_level: ActionParameter(
-            'access-level',
-            required=True,
-            metavar='LEVEL',
-            choices=['guest', 'devel', 'developer', 'reporter', 'maintainer'],
-            help='Access level: devel or reporter.'
-        )
-    ):
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(),
+    dry_run: DryRunParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    access_level: ActionParameter(
+        'access-level',
+        required=True,
+        metavar='LEVEL',
+        choices=['guest', 'devel', 'developer', 'reporter', 'maintainer'],
+        help='Access level: devel or reporter.'
+    )
+):
     """
     Add members to multiple projects.
     """
@@ -713,8 +810,8 @@ def action_add_member(
             )
             if not dry_run:
                 project.members.create({
-                    'user_id' : user.id,
-                    'access_level' : level,
+                    'user_id': user.id,
+                    'access_level': level,
                 })
         except gitlab.GitlabCreateError as exp:
             if exp.response_code == http.HTTPStatus.CONFLICT:
@@ -739,46 +836,46 @@ def action_add_member(
 
 @register_command('get-file')
 def action_get_file(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        remote_file_template: ActionParameter(
-            'remote-file',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns..'
-        ),
-        local_file_template: ActionParameter(
-            'local-file',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        branch: ActionParameter(
-            'branch',
-            default='master',
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        deadline: ActionParameter(
-            'deadline',
-            default='now',
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        blacklist: ActionParameter(
-            'blacklist',
-            default=None,
-            metavar='BLACKLIST',
-            help='Commit authors to ignore (regular expression).'
-        )
-    ):
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    remote_file_template: ActionParameter(
+        'remote-file',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns..'
+    ),
+    local_file_template: ActionParameter(
+        'local-file',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    branch: ActionParameter(
+        'branch',
+        default='master',
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    deadline: ActionParameter(
+        'deadline',
+        default='now',
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    blacklist: ActionParameter(
+        'blacklist',
+        default=None,
+        metavar='BLACKLIST',
+        help='Commit authors to ignore (regular expression).'
+    )
+):
     """
     Get file from multiple repositories.
     """
@@ -827,59 +924,59 @@ def action_get_file(
 
 @register_command('put-file')
 def action_put_file(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(False),
-        dry_run: DryRunParameter(),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        from_file_template: ActionParameter(
-            'from',
-            required=True,
-            metavar='LOCAL_FILE_PATH_WITH_FORMAT',
-            help='Local file path, formatted from CSV columns.'
-        ),
-        to_file_template: ActionParameter(
-            'to',
-            required=True,
-            metavar='REMOTE_FILE_PATH_WITH_FORMAT',
-            help='Remote file path, formatted from CSV columns.'
-        ),
-        branch: ActionParameter(
-            'branch',
-            default='master',
-            metavar='BRANCH',
-            help='Branch to commit to, defaults to master.'
-        ),
-        commit_message_template: ActionParameter(
-            'message',
-            default='Updating {GL[target_filename]}',
-            metavar='COMMIT_MESSAGE_WITH_FORMAT',
-            help='Commit message, formatted from CSV columns.'
-        ),
-        force_commit: ActionParameter(
-            'force-commit',
-            default=False,
-            action='store_true',
-            help='Do not check current file content, always upload.'
-        ),
-        skip_missing_file: ActionParameter(
-            'skip-missing-files',
-            default=False,
-            action='store_true',
-            help='Do not fail when file-to-be-uploaded is missing.'
-        ),
-        only_once: ActionParameter(
-            'once',
-            default=False,
-            action='store_true',
-            help='Upload file only if it is not present.'
-        )
-    ):
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(False),
+    dry_run: DryRunParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    from_file_template: ActionParameter(
+        'from',
+        required=True,
+        metavar='LOCAL_FILE_PATH_WITH_FORMAT',
+        help='Local file path, formatted from CSV columns.'
+    ),
+    to_file_template: ActionParameter(
+        'to',
+        required=True,
+        metavar='REMOTE_FILE_PATH_WITH_FORMAT',
+        help='Remote file path, formatted from CSV columns.'
+    ),
+    branch: ActionParameter(
+        'branch',
+        default='master',
+        metavar='BRANCH',
+        help='Branch to commit to, defaults to master.'
+    ),
+    commit_message_template: ActionParameter(
+        'message',
+        default='Updating {GL[target_filename]}',
+        metavar='COMMIT_MESSAGE_WITH_FORMAT',
+        help='Commit message, formatted from CSV columns.'
+    ),
+    force_commit: ActionParameter(
+        'force-commit',
+        default=False,
+        action='store_true',
+        help='Do not check current file content, always upload.'
+    ),
+    skip_missing_file: ActionParameter(
+        'skip-missing-files',
+        default=False,
+        action='store_true',
+        help='Do not fail when file-to-be-uploaded is missing.'
+    ),
+    only_once: ActionParameter(
+        'once',
+        default=False,
+        action='store_true',
+        help='Upload file only if it is not present.'
+    )
+):
     """
     Upload file to multiple repositories.
     """
@@ -945,21 +1042,21 @@ def action_put_file(
 
 @register_command('get-last-pipeline')
 def action_get_last_pipeline(
-        glb: GitlabInstanceParameter(),
-        users: UserListParameter(),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        summary_only: ActionParameter(
-            'summary-only',
-            default=False,
-            action='store_true',
-            help='Print only summaries (ratio of states across projects)'
-        )
-    ):
+    glb: GitlabInstanceParameter(),
+    users: UserListParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    summary_only: ActionParameter(
+        'summary-only',
+        default=False,
+        action='store_true',
+        help='Print only summaries (ratio of states across projects)'
+    )
+):
     """
     Get pipeline status of multiple projects.
     """
@@ -1003,23 +1100,24 @@ def action_get_last_pipeline(
     else:
         print(json.dumps(result, indent=4))
 
+
 @register_command('get-pipeline-at-commit')
 def action_get_pipeline_at_commit(
-        glb: GitlabInstanceParameter(),
-        users: UserListParameter(),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        commit: ActionParameter(
-            'commit',
-            default=None,
-            metavar='COMMIT_WITH_FORMAT',
-            help='Commit to read pipeline status at.'
-        ),
-    ):
+    glb: GitlabInstanceParameter(),
+    users: UserListParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    commit: ActionParameter(
+        'commit',
+        default=None,
+        metavar='COMMIT_WITH_FORMAT',
+        help='Commit to read pipeline status at.'
+    ),
+):
     """
     Get pipeline status of multiple projects at or prior to specified commit, ignoring skipped pipelines.
     """
@@ -1071,133 +1169,61 @@ def action_get_pipeline_at_commit(
 
     print(json.dumps(result, indent=4))
 
-@register_command('clone')
-def action_clone(
-        glb: GitlabInstanceParameter(),
-        users: UserListParameter(False),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        local_path_template: ActionParameter(
-            'to',
-            required=True,
-            metavar='LOCAL_PATH_WITH_FORMAT',
-            help='Local repository path, formatted from CSV columns.'
-        ),
-        branch: ActionParameter(
-            'branch',
-            default='master',
-            metavar='BRANCH',
-            help='Branch to clone, defaults to master.'
-        ),
-        commit: ActionParameter(
-            'commit',
-            default=None,
-            metavar='COMMIT_WITH_FORMAT',
-            help='Commit to reset to after clone.'
-        ),
-        deadline: ActionParameter(
-            'deadline',
-            default='now',
-            metavar='YYYY-MM-DDTHH:MM:SSZ',
-            help='Submission deadline (defaults to now).'
-        ),
-        blacklist: ActionParameter(
-            'blacklist',
-            default=None,
-            metavar='BLACKLIST',
-            help='Commit authors to ignore (regular expression).'
-        )
-    ):
-    """
-    Clone multiple repositories.
-    """
-
-    # FIXME: commit and deadline are mutually exclusive
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
-
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
-
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project = mg.get_canonical_project(glb, project_template.format(**user.row))
-        local_path = local_path_template.format(**user.row)
-
-        if commit:
-            last_commit = project.commits.get(commit.format(**user.row))
-        else:
-            last_commit = mg.get_commit_before_deadline(
-                glb,
-                project,
-                deadline,
-                branch,
-                commit_filter
-            )
-        mg.clone_or_fetch(glb, project, local_path)
-        mg.reset_to_commit(local_path, last_commit.id)
-
 
 @register_command('deadline-commit')
 def action_deadline_commits(
-        glb: GitlabInstanceParameter(),
-        logger: LoggerParameter(),
-        users: UserListParameter(False),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-        branch_template: ActionParameter(
-            'branch',
-            default='master',
-            metavar='BRANCH_WITH_FORMAT',
-            help='Branch name, defaults to master.'
-        ),
-        prefer_tag_template: ActionParameter(
-            'prefer-tag',
-            default=None,
-            metavar='TAG_WITH_FORMAT',
-            help='Prefer commit with this tag (but also before deadline).'
-        ),
-        deadline: ActionParameter(
-            'deadline',
-            default='now',
-            metavar='YYYY-MM-DDTHH:MM:SSZ',
-            help='Submission deadline (defaults to now).'
-        ),
-        blacklist: ActionParameter(
-            'blacklist',
-            default=None,
-            metavar='BLACKLIST',
-            help='Commit authors to ignore (regular expression).'
-        ),
-        output_header: ActionParameter(
-            'first-line',
-            default='login,commit',
-            metavar='OUTPUT_HEADER',
-            help='First line for the output.'
-        ),
-        output_template: ActionParameter(
-            'format',
-            default='{login},{commit.id}',
-            metavar='OUTPUT_ROW_WITH_FORMAT',
-            help='Formatting for the output row, defaults to {login},{commit.id}.'
-        ),
-        output_filename: ActionParameter(
-            'output',
-            default=None,
-            metavar='OUTPUT_FILENAME',
-            help='Output file, defaults to stdout.'
-        )
-    ):
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    branch_template: ActionParameter(
+        'branch',
+        default='master',
+        metavar='BRANCH_WITH_FORMAT',
+        help='Branch name, defaults to master.'
+    ),
+    prefer_tag_template: ActionParameter(
+        'prefer-tag',
+        default=None,
+        metavar='TAG_WITH_FORMAT',
+        help='Prefer commit with this tag (but also before deadline).'
+    ),
+    deadline: ActionParameter(
+        'deadline',
+        default='now',
+        metavar='YYYY-MM-DDTHH:MM:SSZ',
+        help='Submission deadline (defaults to now).'
+    ),
+    blacklist: ActionParameter(
+        'blacklist',
+        default=None,
+        metavar='BLACKLIST',
+        help='Commit authors to ignore (regular expression).'
+    ),
+    output_header: ActionParameter(
+        'first-line',
+        default='login,commit',
+        metavar='OUTPUT_HEADER',
+        help='First line for the output.'
+    ),
+    output_template: ActionParameter(
+        'format',
+        default='{login},{commit.id}',
+        metavar='OUTPUT_ROW_WITH_FORMAT',
+        help='Formatting for the output row, defaults to {login},{commit.id}.'
+    ),
+    output_filename: ActionParameter(
+        'output',
+        default=None,
+        metavar='OUTPUT_FILENAME',
+        help='Output file, defaults to stdout.'
+    )
+):
     """
     Get last commits before deadline.
     """
@@ -1233,7 +1259,9 @@ def action_deadline_commits(
             class CommitMock:
                 def __init__(self, commit_id):
                     self.id = commit_id
+
             last_commit = CommitMock('0000000000000000000000000000000000000000')
+
         logger.debug("%s at %s", project.path_with_namespace, last_commit.id)
 
         line = output_template.format(commit=last_commit, **user.row)
@@ -1245,15 +1273,15 @@ def action_deadline_commits(
 
 @register_command('commit-stats')
 def action_commit_stats(
-        glb: GitlabInstanceParameter(),
-        users: UserListParameter(),
-        project_template: ActionParameter(
-            'project',
-            required=True,
-            metavar='PROJECT_PATH_WITH_FORMAT',
-            help='Project path, formatted from CSV columns.'
-        ),
-    ):
+    glb: GitlabInstanceParameter(),
+    users: UserListParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+):
     """
     Get basic added/removed lines for projects.
     """
@@ -1279,6 +1307,7 @@ def action_commit_stats(
 
     print(json.dumps(result, indent=4))
 
+
 def init_logging(logging_level):
     """
     Initialize logging subsystem with a reasonable format.
@@ -1288,6 +1317,7 @@ def init_logging(logging_level):
         format='[%(asctime)s %(name)-25s %(levelname)7s] %(message)s',
         level=logging_level
     )
+
 
 def main():
     """
@@ -1311,6 +1341,7 @@ def main():
 
     glb = cli.get_gitlab_instance()
     config.func(glb, config)
+
 
 if __name__ == '__main__':
     main()
