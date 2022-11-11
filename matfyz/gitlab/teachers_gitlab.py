@@ -177,27 +177,6 @@ class UserListParameter(Parameter):
                 yield user_obj
 
 
-class DryRunParameter(Parameter):
-    """
-    Parameter annotation to mark switch for dry run.
-    """
-
-    def __init__(self):
-        Parameter.__init__(self)
-
-    def register(self, argument_name, subparser):
-        subparser.add_argument(
-            '--dry-run',
-            dest='dry_run',
-            default=False,
-            action='store_true',
-            help='Simulate but do not make any real changes.'
-        )
-
-    def get_value(self, argument_name, glb, parsed_options):
-        return parsed_options.dry_run
-
-
 class ActionParameter(Parameter):
     """
     Parameter annotation to create corresponding CLI option.
@@ -230,6 +209,21 @@ class DateTimeActionParameter(ActionParameter):
     def __init__(self, name, **kwargs):
         ActionParameter.__init__(
             self, name, type=mg.get_timestamp, **kwargs
+        )
+
+
+class DryRunActionParameter(ActionParameter):
+    """
+    Parameter annotation to create an option for enabling dry run.
+    """
+
+    def __init__(self):
+        ActionParameter.__init__(
+            self,
+            'dry-run',
+            default=False,
+            action='store_true',
+            help='Simulate but do not make any real changes.'
         )
 
 
@@ -944,7 +938,7 @@ def action_add_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(),
-    dry_run: DryRunParameter(),
+    dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1009,7 +1003,7 @@ def action_remove_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(),
-    dry_run: DryRunParameter(),
+    dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1129,7 +1123,7 @@ def action_put_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(False),
-    dry_run: DryRunParameter(),
+    dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
