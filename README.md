@@ -16,7 +16,8 @@ pip install -r requirements.txt
 
 This will give you `teachers_gitlab` on your `$PATH`. You can also
 use `virtualenv` to test locally or use the provided shell script
-wrapper (as used in the examples).
+wrapper (as used in the examples) which sets up a virtual
+environment automatically.
 
 ## Configuration
 
@@ -47,6 +48,17 @@ email,login,number
 student1@mff.cuni.cz,student1,1
 student2@mff.cuni.cz,student2,2
 ```
+## Template parameters
+
+Some command line parameters accept a template value that is
+really a Python format string. Where applicable, these template
+arguments are evaluated for each user record, providing some 
+usage flexibility, especially when it comes to mass operations.
+
+For example, using `--project student-{login}` in an action such
+as **add-member** will perform the operation on multiple projects
+corresponding to user login names.
+
 
 ## `fork`
 
@@ -66,12 +78,32 @@ repositories `teaching/course/student-1-student1`
 and `teaching/course/student-2-student2`, removing the
 fork relationship.
 
+
+## `protect`
+
+Create a protected branch (or pattern).
+
+Assuming the same input files as in `fork`, the following command
+protects `master` branch for all repositories from the previous
+step but allows developers to push and merge
+
+```shell
+./teachers_gitlab.sh protect \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
+    --branch master \
+    --merge-access-level developer \
+    --push-access-level developer
+```
+
 ## `unprotect`
 
-Remove branch protection, typically needed for `master` branch
-in simple setups.
+Remove a protected branch (or pattern).
 
-Assuming the same input files as in `fork`, following command
+Typically needed for the `master` branch in simple setups.
+
+Assuming the same input files as in `fork`, the following command
 unprotects `master` branch for all repositories from the previous
 step.
 
@@ -83,36 +115,79 @@ step.
     --branch master
 ```
 
-## `protect`
+## `protect-tag`
 
-Set branch protection.
+Create a protected tag (or pattern).
 
-Assuming the same input files as in `fork`, following command
-protects `master` branch for all repositories from the previous
-step but allows developers to push and merge
+Typically used for automatically created checkpoint tags.
 
 ```shell
-./teachers_gitlab.sh unprotect \
+./teachers_gitlab.sh protect-tag \
     --config-file config.ini \
     --users students.csv \
-    --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
-    --branch master \
-    --developers-can-merge \
-    --developers-can-push
+    --project "teaching/nswi004/2022/student-{login}" \
+    --tag 'checkpoint/*' \
+    --create-access-level maintainer
+```
+
+## `unprotect-tag`
+
+Remove a protected tag (or pattern).
+
+```shell
+./teachers_gitlab.sh unprotect-tag \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi004/2022/student-{login}" \
+    --tag 'checkpoint/*'
 ```
 
 ## `add-member`
 
-Add member to a project. Typically called after `fork` (see above).
+Add member(s) to project(s). Typically called after `fork` (see
+above), but also to add students to shared projects.
 
-Adding users to their repositories from the example above is done with
+Adding students to their course projects can be done with
 
 ```shell
 ./teachers_gitlab.sh add-member \
     --config-file config.ini \
     --users students.csv \
     --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
-    --access-level devel
+    --access-level developer
+```
+
+Adding students to a common project can be done with
+
+```shell
+./teachers_gitlab.sh add-member \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi004/upstream/forum" \
+    --access-level reporter
+```
+
+## `remove-member`
+
+Remove member(s) from project(s). Typically used to remove
+students from past course runs or students who have dropped out.
+
+Removing students from a common project can be done with
+
+```shell
+./teachers_gitlab.sh remove-member \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi004/2022/upstream/forum"
+```
+
+Removing students from their course projects can be done with
+
+```shell
+./teachers_gitlab.sh remove-member \
+    --config-file config.ini \
+    --users students.csv \
+    --project "teaching/nswi004/2022/student-{login}"
 ```
 
 ## `clone`
