@@ -1,4 +1,3 @@
-
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2020 Charles University
 
@@ -11,19 +10,21 @@ import http
 import logging
 import os
 import pathlib
-import requests
 import subprocess
 import time
+
 import dateparser
 import gitlab
 import pytz
+import requests
+
 
 def retries(
-        n=None,
-        interval=2,
-        timeout=None,
-        message="Operation timed-out (too many retries)"
-    ):
+    n=None,
+    interval=2,
+    timeout=None,
+    message="Operation timed-out (too many retries)"
+):
     """
     To be used in for-loops to try action multiple times.
     Throws exception on time-out.
@@ -43,6 +44,7 @@ def retries(
         time.sleep(interval)
     raise Exception(message)
 
+
 def retry_on_exception(message, exceptions):
     """
     Decorator for function that should be retried on some kind of exception.
@@ -50,15 +52,16 @@ def retry_on_exception(message, exceptions):
 
     def decorator(func):
         """
-        Actual decorator (because we ned to process arguments).
+        Actual decorator (because we need to process arguments).
         """
+
         def wrapper(*args, **kwargs):
             """
             Wrapper calling the original function.
             """
             logger = logging.getLogger('retry_on_exception')
             last_ex = None
-            for i in retries(6, timeout=240):
+            for _ in retries(6, timeout=240):
                 try:
                     return func(*args, **kwargs)
                 except Exception as ex:
@@ -74,14 +77,21 @@ def retry_on_exception(message, exceptions):
                         raise ex
                     time.sleep(1)
             raise last_ex
+
         return wrapper
+
     return decorator
 
-@retry_on_exception('Failed to canonicalize a project, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
+
+@retry_on_exception(
+    'Failed to canonicalize a project, will retry...',
+    [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError]
+)
 def get_canonical_project(glb, project):
     """
-    Ensure we have instance of gitlab...Project.
+    Ensure we have an instance of gitlab.*.Project.
 
+    :param glb: GitLab instance.
     :param project: Either object already or path or project id.
     """
 
@@ -117,9 +127,9 @@ def fork_project_idempotent(glb, parent, fork_namespace, fork_name):
 
     try:
         fork_handle = parent.forks.create({
-            'namespace' : fork_namespace,
-            'path' : fork_name,
-            'name' : fork_name,
+            'namespace': fork_namespace,
+            'path': fork_name,
+            'name': fork_name,
         })
         fork_identity = fork_handle.id
     except gitlab.GitlabCreateError as exp:
@@ -145,13 +155,20 @@ def remove_fork_relationship(glb, project):
         else:
             raise
 
-@retry_on_exception('Failed to create tag, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
+
+@retry_on_exception(
+    'Failed to create tag, will retry...',
+    [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError]
+)
 def create_tag(glb, project, tag_params):
     project = get_canonical_project(glb, project)
     project.tags.create(tag_params)
 
 
-@retry_on_exception('Failed to put file, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
+@retry_on_exception(
+    'Failed to put file, will retry...',
+    [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError]
+)
 def put_file(glb, project, branch, file_path, file_contents, overwrite, commit_message):
     """
     Commit a file, overwriting existing content forcefully.
@@ -181,7 +198,11 @@ def put_file(glb, project, branch, file_path, file_contents, overwrite, commit_m
         else:
             raise
 
-@retry_on_exception('Failed to read file, will retry...', [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError])
+
+@retry_on_exception(
+    'Failed to get file, will retry...',
+    [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError]
+)
 def get_file_contents(glb, project, branch, file_path):
     """
     Retrieve current file contents on a GitLab repository.
@@ -216,25 +237,24 @@ def get_timestamp(ts):
         # Time zone already set
         return result
 
+
 def get_commit_with_tag(glb, project, tag_name):
     """
-    Find commit with given tag in a project.
+    Find a commit corresponding to a given tag in a project.
+    Returns the commit object or 'None' if there is no such commit.
     """
 
     project = get_canonical_project(glb, project)
     for t in project.tags.list():
         if t.name == tag_name:
             return t.commit
+
     return None
 
+
 def get_commit_before_deadline(
-        glb,
-        project,
-        deadline,
-        branch,
-        commit_filter=lambda commit: True,
-        tag=None
-    ):
+    glb, project, deadline, branch, commit_filter=lambda commit: True, tag=None
+):
     """
     Get last commit just before the deadline but prefer a tag if available.
     """
