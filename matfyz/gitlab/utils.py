@@ -13,9 +13,7 @@ import pathlib
 import subprocess
 import time
 
-import dateparser
 import gitlab
-import pytz
 import requests
 
 
@@ -228,14 +226,21 @@ def get_timestamp(ts):
     """
     Try to convert any string to datetime with a timezone.
     """
+    import dateparser
 
     result = dateparser.parse(ts)
-    try:
-        tz = pytz.timezone('UTC')
-        return tz.localize(result)
-    except ValueError:
-        # Time zone already set
-        return result
+    if not result:
+        # Propagate parsing errors as exceptions.
+        raise ValueError
+
+    if not result.tzinfo:
+        from datetime import datetime
+
+        # Add local time zone if necessary.
+        local_tz = datetime.now().astimezone().tzinfo
+        return result.replace(tzinfo=local_tz)
+
+    return result
 
 
 def get_commit_with_tag(glb, project, tag_name):
@@ -245,9 +250,10 @@ def get_commit_with_tag(glb, project, tag_name):
     """
 
     project = get_canonical_project(glb, project)
-    for t in project.tags.list():
-        if t.name == tag_name:
-            return t.commit
+
+    tags = project.tags.list(iterator=True)
+    if tag := next(filter(lambda t: t.name == tag_name, tags), None):
+        return project.commits.get(tag.commit['id'])
 
     return None
 
@@ -262,18 +268,19 @@ def get_commit_before_deadline(
     if tag:
         commit = get_commit_with_tag(glb, project, tag)
         if commit:
-            ts = get_timestamp(commit['created_at'])
-            ts_deadline = get_timestamp(deadline)
-            if ts <= ts_deadline:
-                commit = project.commits.get(commit['id'])
+            ts = get_timestamp(commit.created_at)
+            if ts <= deadline:
                 return commit
             else:
                 # Tag is after deadline, fallback to normal resolution
                 pass
-    commits = project.commits.list(ref_name=branch, until=deadline)
-    for commit in commits:
-        if commit_filter(commit):
-            return commit
+
+    # By default, commits are ordered in reverse chronological order, i.e.,
+    # the most recent first. We therefore take the first matching commit.
+    commits = project.commits.list(ref_name=branch, until=deadline.isoformat(), iterator=True)
+    if commit := next(filter(commit_filter, commits), None):
+        return commit
+
     raise gitlab.exceptions.GitlabGetError("No matching commit found.")
 
 
