@@ -370,6 +370,79 @@ def action_accounts(
         ))
 
 
+@register_command('clone')
+def action_clone(
+    glb: GitlabInstanceParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    local_path_template: ActionParameter(
+        'to',
+        required=True,
+        metavar='LOCAL_PATH_WITH_FORMAT',
+        help='Local repository path, formatted from CSV columns.'
+    ),
+    branch: ActionParameter(
+        'branch',
+        default='master',
+        metavar='BRANCH',
+        help='Branch to clone, defaults to master.'
+    ),
+    commit: ActionParameter(
+        'commit',
+        default=None,
+        metavar='COMMIT_WITH_FORMAT',
+        help='Commit to reset to after clone.'
+    ),
+    deadline: ActionParameter(
+        'deadline',
+        default='now',
+        metavar='YYYY-MM-DDTHH:MM:SSZ',
+        help='Submission deadline (defaults to now).'
+    ),
+    blacklist: ActionParameter(
+        'blacklist',
+        default=None,
+        metavar='BLACKLIST',
+        help='Commit authors to ignore (regular expression).'
+    )
+):
+    """
+    Clone multiple repositories.
+    """
+
+    # FIXME: commit and deadline are mutually exclusive
+
+    if deadline == 'now':
+        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+
+    if blacklist:
+        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
+    else:
+        commit_filter = lambda commit: True
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        project = mg.get_canonical_project(glb, project_template.format(**user.row))
+        local_path = local_path_template.format(**user.row)
+
+        if commit:
+            last_commit = project.commits.get(commit.format(**user.row))
+        else:
+            last_commit = mg.get_commit_before_deadline(
+                glb,
+                project,
+                deadline,
+                branch,
+                commit_filter
+            )
+        mg.clone_or_fetch(glb, project, local_path)
+        mg.reset_to_commit(local_path, last_commit.id)
+
+
 @register_command('fork')
 def action_fork(
     glb: GitlabInstanceParameter(),
@@ -478,6 +551,95 @@ def action_set_branch_protection(
         )
 
 
+@register_command('unprotect')
+def action_unprotect_branch(
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    branch_name: ActionParameter(
+        'branch',
+        required=True,
+        metavar='GIT_BRANCH',
+        help='Git branch name to unprotect.'
+    )
+):
+    """
+    Unprotect branch on multiple projects.
+    """
+
+    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
+        branch = project.branches.get(branch_name)
+        logger.info(
+            "Unprotecting branch %s in %s",
+            branch.name,
+            project.path_with_namespace
+        )
+        branch.unprotect()
+
+
+@register_command('create-tag')
+def action_create_tag(
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(False),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    ),
+    tag_name: ActionParameter(
+        'tag',
+        required=True,
+        metavar='TAG_NAME',
+        help='Git tag name.'
+    ),
+    ref_name_template: ActionParameter(
+        'ref',
+        required=True,
+        metavar='GIT_BRANCH_OR_COMMIT_WITH_TEMPLATE',
+        help='Git branch name (tip) or commit to tag.'
+    ),
+    commit_message_template: ActionParameter(
+        'message',
+        default=None,
+        metavar='COMMIT_MESSAGE_WITH_FORMAT',
+        help='Commit message, formatted from CSV columns.'
+    ),
+):
+    """
+    Create a tag on a given commit or branch tip.
+    """
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        ref_name = ref_name_template.format(**user.row)
+        params = {
+            'tag_name': tag_name,
+            'ref': ref_name,
+        }
+
+        if commit_message_template:
+            extras = {
+                'tag': tag_name,
+            }
+            params['message'] = commit_message_template.format(GL=extras, **user.row)
+
+        logger.info("Creating tag %s on %s in %s", tag_name, ref_name, project.path_with_namespace)
+        try:
+            mg.create_tag(glb, project, params)
+        except gitlab.exceptions.GitlabCreateError as exp:
+            if (exp.response_code == http.HTTPStatus.BAD_REQUEST) and exp.error_message.endswith("already exists"):
+                pass
+            else:
+                raise
+
+
 @register_command('protect-tag')
 def action_set_tag_protection(
     glb: GitlabInstanceParameter(),
@@ -573,95 +735,6 @@ def action_unset_tag_protection(
             existing.delete()
         except gitlab.exceptions.GitlabGetError:
             logger.debug("Skipping as it is not protected.")
-
-
-@register_command('unprotect')
-def action_unprotect_branch(
-    glb: GitlabInstanceParameter(),
-    logger: LoggerParameter(),
-    users: UserListParameter(),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
-    branch_name: ActionParameter(
-        'branch',
-        required=True,
-        metavar='GIT_BRANCH',
-        help='Git branch name to unprotect.'
-    )
-):
-    """
-    Unprotect branch on multiple projects.
-    """
-
-    for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        branch = project.branches.get(branch_name)
-        logger.info(
-            "Unprotecting branch %s in %s",
-            branch.name,
-            project.path_with_namespace
-        )
-        branch.unprotect()
-
-
-@register_command('create-tag')
-def action_create_tag(
-    glb: GitlabInstanceParameter(),
-    logger: LoggerParameter(),
-    users: UserListParameter(False),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
-    tag_name: ActionParameter(
-        'tag',
-        required=True,
-        metavar='TAG_NAME',
-        help='Git tag name.'
-    ),
-    ref_name_template: ActionParameter(
-        'ref',
-        required=True,
-        metavar='GIT_BRANCH_OR_COMMIT_WITH_TEMPLATE',
-        help='Git branch name (tip) or commit to tag.'
-    ),
-    commit_message_template: ActionParameter(
-        'message',
-        default=None,
-        metavar='COMMIT_MESSAGE_WITH_FORMAT',
-        help='Commit message, formatted from CSV columns.'
-    ),
-):
-    """
-    Create a tag on a given commit or branch tip.
-    """
-
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        ref_name = ref_name_template.format(**user.row)
-        params = {
-            'tag_name': tag_name,
-            'ref': ref_name,
-        }
-
-        if commit_message_template:
-            extras = {
-                'tag': tag_name,
-            }
-            params['message'] = commit_message_template.format(GL=extras, **user.row)
-
-        logger.info("Creating tag %s on %s in %s", tag_name, ref_name, project.path_with_namespace)
-        try:
-            mg.create_tag(glb, project, params)
-        except gitlab.exceptions.GitlabCreateError as exp:
-            if (exp.response_code == http.HTTPStatus.BAD_REQUEST) and exp.error_message.endswith("already exists"):
-                pass
-            else:
-                raise
 
 
 @register_command('get-members')
@@ -1095,79 +1168,6 @@ def action_get_pipeline_at_commit(
         result[project.path_with_namespace] = entry
 
     print(json.dumps(result, indent=4))
-
-
-@register_command('clone')
-def action_clone(
-    glb: GitlabInstanceParameter(),
-    users: UserListParameter(False),
-    project_template: ActionParameter(
-        'project',
-        required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
-    ),
-    local_path_template: ActionParameter(
-        'to',
-        required=True,
-        metavar='LOCAL_PATH_WITH_FORMAT',
-        help='Local repository path, formatted from CSV columns.'
-    ),
-    branch: ActionParameter(
-        'branch',
-        default='master',
-        metavar='BRANCH',
-        help='Branch to clone, defaults to master.'
-    ),
-    commit: ActionParameter(
-        'commit',
-        default=None,
-        metavar='COMMIT_WITH_FORMAT',
-        help='Commit to reset to after clone.'
-    ),
-    deadline: ActionParameter(
-        'deadline',
-        default='now',
-        metavar='YYYY-MM-DDTHH:MM:SSZ',
-        help='Submission deadline (defaults to now).'
-    ),
-    blacklist: ActionParameter(
-        'blacklist',
-        default=None,
-        metavar='BLACKLIST',
-        help='Commit authors to ignore (regular expression).'
-    )
-):
-    """
-    Clone multiple repositories.
-    """
-
-    # FIXME: commit and deadline are mutually exclusive
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
-
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
-
-    for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project = mg.get_canonical_project(glb, project_template.format(**user.row))
-        local_path = local_path_template.format(**user.row)
-
-        if commit:
-            last_commit = project.commits.get(commit.format(**user.row))
-        else:
-            last_commit = mg.get_commit_before_deadline(
-                glb,
-                project,
-                deadline,
-                branch,
-                commit_filter
-            )
-        mg.clone_or_fetch(glb, project, local_path)
-        mg.reset_to_commit(local_path, last_commit.id)
 
 
 @register_command('deadline-commit')
