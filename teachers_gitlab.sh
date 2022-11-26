@@ -5,7 +5,7 @@
 
 BASE_DIR=$(dirname -- "$(realpath -- "$0")")
 [ -z "$BASE_DIR" ] && {
-    echo "error: unable to find script base directory"
+    echo "error: unable to find script base directory" >&2
     exit 1
 }
 
@@ -21,7 +21,7 @@ REQ_FILE="$BASE_DIR/requirements.txt"
     python3 -m venv "$VENV_DIR" && \
     "$VENV_DIR/bin/pip3" install --upgrade pip && \
     "$VENV_DIR/bin/pip3" install --requirement "$REQ_FILE" || {
-        echo "error: failed to setup/update virtual environment"
+        echo "error: failed to setup/update virtual environment" >&2
         exit 1
     }
 
