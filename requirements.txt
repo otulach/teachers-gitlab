@@ -1,4 +1,4 @@
-dateparser ~= 1.1.0
-python-gitlab ~= 2.10.1
-pytz ~= 2021.3
 setuptools
+dateparser
+python-gitlab >= 3.6.0
+pytz

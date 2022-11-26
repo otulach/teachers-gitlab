@@ -209,15 +209,79 @@ class ActionParameter(Parameter):
         self.name = name
         self.extra_args = kwargs
 
+    @staticmethod
+    def _dest_name(argument_name):
+        return 'arg_' + argument_name
+
     def register(self, argument_name, subparser):
         subparser.add_argument(
             '--' + self.name,
-            dest='arg_' + argument_name,
+            dest=self._dest_name(argument_name),
             **self.extra_args
         )
 
     def get_value(self, argument_name, glb, parsed_options):
-        return getattr(parsed_options, 'arg_' + argument_name)
+        return getattr(parsed_options, self._dest_name(argument_name))
+
+
+class AccessLevelActionParameter(ActionParameter):
+    """
+    Parameter annotation to create an access level action parameter.
+    """
+
+    def __init__(self, name, compat_flags=None, **kwargs):
+        ActionParameter.__init__(
+            self, name,
+            # Provide available access level names as choices.
+            choices=[level.name for level in list(gitlab.const.AccessLevel)],
+            # Accept both lower and upper case access level names.
+            type=str.upper,
+            **kwargs
+        )
+        self.compat_flags = compat_flags if compat_flags else []
+
+    def register(self, argument_name, subparser):
+        # Compatibility flags are mutually exclusive with each
+        # other and the original parameter.
+        if self.compat_flags:
+            subparser = subparser.add_mutually_exclusive_group()
+
+        ActionParameter.register(self, argument_name, subparser)
+
+        # Compatibility flags set the original parameter value
+        # to predefined access levels.
+        for flag in self.compat_flags:
+            subparser.add_argument(
+                '--' + flag["name"],
+                dest=self._dest_name(argument_name),
+                action='store_const',
+                const=flag["level"],
+                help=flag["help"]
+            )
+
+    def get_value(self, argument_name, glb, parsed_options):
+        # The value may be a string or AccessLevel instance. Make sure to return the latter.
+        value = ActionParameter.get_value(self, argument_name, glb, parsed_options)
+        return gitlab_get_access_level(value)
+
+
+def gitlab_get_access_level(level):
+    """
+    Looks up a GitLab AccessLevel instance.
+    """
+    if isinstance(level, str):
+        return gitlab.const.AccessLevel[level]
+    elif isinstance(level, int):
+        return gitlab.const.AccessLevel(level)
+    elif isinstance(level, gitlab.const.AccessLevel):
+        return level
+    else:
+        raise ValueError(f"invalid access level: {level}")
+
+
+def gitlab_extract_access_level(gl_object, access_type):
+    access_level_value = getattr(gl_object, access_type)[0]['access_level']
+    return gitlab_get_access_level(access_level_value)
 
 
 class CommandParser:
@@ -371,6 +435,24 @@ def action_accounts(
         ))
 
 
+def get_regex_blacklist_filter(blacklist_re, func):
+    def accept_all(_):
+        return True
+
+    def reject_blacklist_matches(obj):
+        return not blacklist_pattern.fullmatch(func(obj))
+
+    if blacklist_re:
+        blacklist_pattern = re.compile(blacklist_re)
+        return reject_blacklist_matches
+    else:
+        return accept_all
+
+
+def get_commit_author_email_filter(blacklist):
+    return get_regex_blacklist_filter(blacklist, lambda commit: commit.author_email)
+
+
 @register_command('clone')
 def action_clone(
     glb: GitlabInstanceParameter(),
@@ -421,11 +503,7 @@ def action_clone(
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
-
+    commit_filter = get_commit_author_email_filter(blacklist)
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         project = mg.get_canonical_project(glb, project_template.format(**user.row))
         local_path = local_path_template.format(**user.row)
@@ -522,17 +600,25 @@ def action_protect_branch(
         metavar='GIT_BRANCH',
         help='Git branch name to set protection on.'
     ),
-    developers_can_merge: ActionParameter(
-        'developers-can-merge',
-        default=False,
-        action='store_true',
-        help='Allow developers to merge into this branch.'
+    merge_access_level: AccessLevelActionParameter(
+        'merge-access-level',
+        default=gitlab.const.AccessLevel.MAINTAINER,
+        help="Access level required to merge to this branch. Defaults to 'MAINTAINER'.",
+        compat_flags=[{
+            "name": "developers-can-merge",
+            "help": "DEPRECATED: Allow developers to merge to this branch.",
+            "level": gitlab.const.AccessLevel.DEVELOPER
+        }]
     ),
-    developers_can_push: ActionParameter(
-        'developers-can-push',
-        default=False,
-        action='store_true',
-        help='Allow developers to merge into this branch.'
+    push_access_level: AccessLevelActionParameter(
+        'push-access-level',
+        default=gitlab.const.AccessLevel.MAINTAINER,
+        help="Access level required to push to this branch. Defaults to 'MAINTAINER'.",
+        compat_flags=[{
+            "name": "developers-can-push",
+            "help": "DEPRECATED: Allow developers to push to this branch.",
+            "level": gitlab.const.AccessLevel.DEVELOPER
+        }]
     )
 ):
     """
@@ -540,16 +626,52 @@ def action_protect_branch(
     """
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        branch = project.branches.get(branch_name)
         logger.info(
-            "Protecting branch %s in %s",
-            branch.name,
-            project.path_with_namespace
+            "Protecting branch '%s' in %s",
+            branch_name, project.path_with_namespace
         )
-        branch.protect(
-            developers_can_push=developers_can_push,
-            developers_can_merge=developers_can_merge
+
+        try:
+            _project_protect_branch(
+                project, branch_name, merge_access_level, push_access_level,
+                logger
+            )
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to protect branch: %s", exp)
+
+
+def _project_protect_branch(project, branch_name, merge_access_level, push_access_level, logger):
+    def branch_get_merge_access_level(branch):
+        return gitlab_extract_access_level(branch, 'merge_access_levels')
+
+    def branch_get_push_access_level(branch):
+        return gitlab_extract_access_level(branch, 'push_access_levels')
+
+    # Protected branches cannot be modified and saved (they lack the SaveMixin).
+    # If a protected branch already exists and does not have the desired access
+    # levels, it needs to be deleted and created anew.
+    if protected_branch := _project_get_protected_branch(project, branch_name):
+        existing_merge_level = branch_get_merge_access_level(protected_branch)
+        existing_push_level = branch_get_push_access_level(protected_branch)
+        if existing_merge_level == merge_access_level and existing_push_level == push_access_level:
+            logger.debug(
+                "- Already exists with '%s/%s' merge/push access, skipping.",
+                merge_access_level.name, push_access_level.name
+            )
+            return
+
+        logger.info(
+            "- Already exists with '%s/%s' merge/push access, updating to '%s/%s'.",
+            existing_merge_level.name, existing_push_level.name,
+            merge_access_level.name, push_access_level.name
         )
+        protected_branch.delete()
+
+    project.protectedbranches.create({
+        'name': branch_name,
+        'merge_access_level': merge_access_level,
+        'push_access_level': push_access_level
+    })
 
 
 @register_command('unprotect')
@@ -575,12 +697,30 @@ def action_unprotect_branch(
     """
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        branch = project.branches.get(branch_name)
         logger.info(
             "Unprotecting branch '%s' in %s",
-            branch.name, project.path_with_namespace
+            branch_name, project.path_with_namespace
         )
-        branch.unprotect()
+
+        try:
+            _project_unprotect_branch(project, branch_name, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to unprotect branch: %s", exp)
+
+
+def _project_unprotect_branch(project, branch_name, logger):
+    if protected_branch := _project_get_protected_branch(project, branch_name):
+        protected_branch.delete()
+    else:
+        logger.debug("- Protected branch '%s' not found.", branch_name)
+
+
+def _project_get_protected_branch(project, branch_name):
+    try:
+        return project.protectedbranches.get(branch_name)
+    except gitlab.exceptions.GitlabGetError:
+        # There is no such protected branch.
+        return None
 
 
 @register_command('create-tag')
@@ -657,28 +797,27 @@ def action_protect_tag(
         metavar='GIT_TAG',
         help='Git tag name to set protection on.'
     ),
-    developers_can_create: ActionParameter(
-        'developers-can-create',
-        default=False,
-        action='store_true',
-        help='Allow developers to create this tag.'
-    ),
-    maintainers_can_create: ActionParameter(
-        'maintainers-can-create',
-        default=False,
-        action='store_true',
-        help='Allow maintainers to create this tag.'
-    ),
+    create_access_level: AccessLevelActionParameter(
+        'create-access-level',
+        default=gitlab.const.AccessLevel.NO_ACCESS,
+        help="Access level required to create this tag. Defaults to 'NO_ACCESS'.",
+        compat_flags=[
+            {
+                "name": "developers-can-create",
+                "help": "DEPRECATED: Allow developers to create this tag.",
+                "level": gitlab.const.AccessLevel.DEVELOPER
+            },
+            {
+                "name": "maintainers-can-create",
+                "help": "DEPRECATED: Allow maintainers to create this tag.",
+                "level": gitlab.const.AccessLevel.MAINTAINER
+            }
+        ]
+    )
 ):
     """
     Set tag protection on multiple projects.
     """
-
-    create_access_level = gitlab.NO_ACCESS
-    if developers_can_create:
-        create_access_level = gitlab.DEVELOPER_ACCESS
-    if maintainers_can_create:
-        create_access_level = gitlab.MAINTAINER_ACCESS
 
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
         logger.info(
@@ -686,29 +825,38 @@ def action_protect_tag(
             tag_name, project.path_with_namespace
         )
 
-        # Protected tags cannot be modified and saved (they lack SaveMixin).
-        # They need to be deleted and created anew.
         try:
-            protected_tag = project.protectedtags.get(tag_name)
-            existing_create_level = protected_tag.create_access_levels[0]['access_level']
-            if existing_create_level == create_access_level:
-                logger.debug("Skipping as it is already set.")
-                continue
+            _project_protect_tag(project, tag_name, create_access_level, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to protect tag: %s", exp)
 
-            logger.warning(
-                " - Need to delete existing (access %d => %d) one first.",
-                existing_create_level, create_access_level
+
+def _project_protect_tag(project, tag_name, create_access_level, logger):
+    def tag_get_create_access_level(tag):
+        return gitlab_extract_access_level(tag, 'create_access_levels')
+
+    # Protected tags cannot be modified and saved (they lack the SaveMixin).
+    # If a protected tag already exists and does not have the desired access
+    # levels, it needs to be deleted and created anew.
+    if protected_tag := _project_get_protected_tag(project, tag_name):
+        existing_create_level = tag_get_create_access_level(protected_tag)
+        if existing_create_level == create_access_level:
+            logger.debug(
+                "- Already exists with '%s' create access, skipping.",
+                create_access_level.name
             )
-            protected_tag.delete()
+            return
 
-        except gitlab.exceptions.GitlabGetError:
-            # There is no such protected tag.
-            pass
+        logger.info(
+            "- Already exists with '%s' create access, updating to '%s'.",
+            existing_create_level.name, create_access_level.name
+        )
+        protected_tag.delete()
 
-        project.protectedtags.create({
-            'name': tag_name,
-            'create_access_level': create_access_level
-        })
+    project.protectedtags.create({
+        'name': tag_name,
+        'create_access_level': create_access_level
+    })
 
 
 @register_command('unprotect-tag')
@@ -726,7 +874,7 @@ def action_unprotect_tag(
         'tag',
         required=True,
         metavar='GIT_TAG',
-        help='Git tag name to unset protection on.'
+        help='Git tag name to unprotect.'
     ),
 ):
     """
@@ -738,12 +886,26 @@ def action_unprotect_tag(
             "Unprotecting tag '%s' in %s",
             tag_name, project.path_with_namespace
         )
-        try:
-            protected_tag = project.protectedtags.get(tag_name)
-            protected_tag.delete()
 
-        except gitlab.exceptions.GitlabGetError:
-            logger.debug("Skipping as it is not protected.")
+        try:
+            _project_unprotect_tag(project, tag_name, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to unprotect tag: %s", exp)
+
+
+def _project_unprotect_tag(project, tag_name, logger):
+    if protected_tag := _project_get_protected_tag(project, tag_name):
+        protected_tag.delete()
+    else:
+        logger.debug("- Protected tag '%s' not found.", tag_name)
+
+
+def _project_get_protected_tag(project, tag_name):
+    try:
+        return project.protectedtags.get(tag_name)
+    except gitlab.exceptions.GitlabGetError:
+        # There is no such protected tag.
+        return None
 
 
 @register_command('get-members')
@@ -786,58 +948,103 @@ def action_add_member(
         metavar='PROJECT_PATH_WITH_FORMAT',
         help='Project path, formatted from CSV columns.'
     ),
-    access_level: ActionParameter(
+    access_level: AccessLevelActionParameter(
         'access-level',
         required=True,
-        metavar='LEVEL',
-        choices=['guest', 'devel', 'developer', 'reporter', 'maintainer'],
-        help='Access level: devel or reporter.'
+        help="Access level granted to the member in the project."
     )
 ):
     """
     Add members to multiple projects.
     """
 
-    if access_level == 'guest':
-        level = gitlab.GUEST_ACCESS
-    elif access_level == 'reporter':
-        level = gitlab.REPORTER_ACCESS
-    elif (access_level == 'devel') or (access_level == 'developer'):
-        level = gitlab.DEVELOPER_ACCESS
-    elif access_level == 'maintainer':
-        level = gitlab.MAINTAINER_ACCESS
-    else:
-        raise Exception("Unsupported access level.")
-
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
-        project_path = project.path_with_namespace
+        logger.info(
+            "Adding %s (%s) to %s",
+            user.username, access_level.name, project.path_with_namespace
+        )
+
+        if dry_run:
+            continue
 
         try:
-            logger.info(
-                "Adding %s (as %s) to %s",
-                user.username, level, project_path
+            _project_add_member(project, user, access_level, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to add member: %s", exp)
+
+
+def _project_add_member(project, user, access_level, logger):
+    if member := _project_get_member(project, user):
+        # If a member already exists with correct access level, do nothing,
+        # otherwise update the access level (project member attributes can
+        # be updated and saved).
+        existing_access_level = gitlab_get_access_level(member.access_level)
+        if existing_access_level == access_level:
+            logger.debug(
+                "- Already exists with '%s' access, skipping.",
+                access_level.name
             )
-            if not dry_run:
-                project.members.create({
-                    'user_id': user.id,
-                    'access_level': level,
-                })
-        except gitlab.GitlabCreateError as exp:
-            if exp.response_code == http.HTTPStatus.CONFLICT:
-                # Member exists so check and optionally update the access level.
-                member = project.members.get(user.id)
-                if member.access_level != level:
-                    logger.info(
-                        "Updating %s access from %s to %s",
-                        user.username, member.access_level, level
-                    )
-                    member.access_level = level
-                    member.save()
-            else:
-                logger.error(
-                    "Failed to add %s (as %s) to %s: %s",
-                    user.username, level, project_path, exp
-                )
+            return
+
+        logger.info(
+            "- Already exists with '%s' access, updating to '%s'.",
+            existing_access_level.name, access_level.name
+        )
+        member.access_level = access_level
+        member.save()
+
+    else:
+        # The user is not a member of the project, create a new member.
+        project.members.create({
+            'user_id': user.id,
+            'access_level': access_level,
+        })
+
+
+@register_command('remove-member')
+def action_remove_member(
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    users: UserListParameter(),
+    dry_run: DryRunParameter(),
+    project_template: ActionParameter(
+        'project',
+        required=True,
+        metavar='PROJECT_PATH_WITH_FORMAT',
+        help='Project path, formatted from CSV columns.'
+    )
+):
+    """
+    Remove members from multiple projects.
+    """
+
+    for user, project in as_existing_gitlab_projects(glb, users, project_template):
+        logger.info(
+            "Removing %s from %s", user.username, project.path_with_namespace
+        )
+
+        if dry_run:
+            continue
+
+        try:
+            _project_remove_member(project, user, logger)
+        except gitlab.GitlabError as exp:
+            logger.error("- Failed to remove member: %s", exp)
+
+
+def _project_remove_member(project, user, logger):
+    if member := _project_get_member(project, user):
+        member.delete()
+    else:
+        logger.debug("- Member '%s' not found.", user.username)
+
+
+def _project_get_member(project, user):
+    try:
+        return project.members.get(user.id)
+    except gitlab.GitlabGetError:
+        # There is no such member in the project.
+        return None
 
 
 @register_command('get-file')
@@ -889,11 +1096,7 @@ def action_get_file(
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
-
+    commit_filter = get_commit_author_email_filter(blacklist)
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
         remote_file = remote_file_template.format(**user.row)
         local_file = local_file_template.format(**user.row)
@@ -1242,10 +1445,7 @@ def action_deadline_commits(
     if deadline == 'now':
         deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
-    if blacklist:
-        commit_filter = lambda commit: not re.fullmatch(blacklist, commit.author_email)
-    else:
-        commit_filter = lambda commit: True
+    commit_filter = get_commit_author_email_filter(blacklist)
 
     print(output_header, file=output)
 
