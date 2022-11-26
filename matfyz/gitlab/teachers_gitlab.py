@@ -22,7 +22,6 @@ import os
 import pathlib
 import re
 import sys
-import time
 
 import gitlab
 
@@ -178,27 +177,6 @@ class UserListParameter(Parameter):
                 yield user_obj
 
 
-class DryRunParameter(Parameter):
-    """
-    Parameter annotation to mark switch for dry run.
-    """
-
-    def __init__(self):
-        Parameter.__init__(self)
-
-    def register(self, argument_name, subparser):
-        subparser.add_argument(
-            '--dry-run',
-            dest='dry_run',
-            default=False,
-            action='store_true',
-            help='Simulate but do not make any real changes.'
-        )
-
-    def get_value(self, argument_name, glb, parsed_options):
-        return parsed_options.dry_run
-
-
 class ActionParameter(Parameter):
     """
     Parameter annotation to create corresponding CLI option.
@@ -222,6 +200,31 @@ class ActionParameter(Parameter):
 
     def get_value(self, argument_name, glb, parsed_options):
         return getattr(parsed_options, self._dest_name(argument_name))
+
+
+class DateTimeActionParameter(ActionParameter):
+    """
+    Parameter annotation to create a datetime action parameter.
+    """
+    def __init__(self, name, **kwargs):
+        ActionParameter.__init__(
+            self, name, type=mg.get_timestamp, **kwargs
+        )
+
+
+class DryRunActionParameter(ActionParameter):
+    """
+    Parameter annotation to create an option for enabling dry run.
+    """
+
+    def __init__(self):
+        ActionParameter.__init__(
+            self,
+            'dry-run',
+            default=False,
+            action='store_true',
+            help='Simulate but do not make any real changes.'
+        )
 
 
 class AccessLevelActionParameter(ActionParameter):
@@ -481,7 +484,7 @@ def action_clone(
         metavar='COMMIT_WITH_FORMAT',
         help='Commit to reset to after clone.'
     ),
-    deadline: ActionParameter(
+    deadline: DateTimeActionParameter(
         'deadline',
         default='now',
         metavar='YYYY-MM-DDTHH:MM:SSZ',
@@ -499,9 +502,6 @@ def action_clone(
     """
 
     # FIXME: commit and deadline are mutually exclusive
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
     commit_filter = get_commit_author_email_filter(blacklist)
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
@@ -741,7 +741,7 @@ def action_create_tag(
         'ref',
         required=True,
         metavar='GIT_BRANCH_OR_COMMIT_WITH_TEMPLATE',
-        help='Git branch name (tip) or commit to tag.'
+        help='Git branch name (tip) or commit to tag, formatted from CSV columns.'
     ),
     commit_message_template: ActionParameter(
         'message',
@@ -926,11 +926,11 @@ def action_members(
     """
 
     project = mg.get_canonical_project(glb, project)
+    members = project.members_all if inherited else project.members
 
     print('login,name')
-    members = project.members_all if inherited else project.members
-    for member in members.list(all=True):
-        print('{},{}'.format(member.username, member.name))
+    for member in members.list(all=True, iterator=True):
+        print(f"{member.username},{member.name}")
 
 
 @register_command('add-member')
@@ -938,7 +938,7 @@ def action_add_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(),
-    dry_run: DryRunParameter(),
+    dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1003,7 +1003,7 @@ def action_remove_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(),
-    dry_run: DryRunParameter(),
+    dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1058,26 +1058,26 @@ def action_get_file(
     remote_file_template: ActionParameter(
         'remote-file',
         required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns..'
+        metavar='REMOTE_FILE_PATH_WITH_FORMAT',
+        help='Remote file path, formatted from CSV columns..'
     ),
     local_file_template: ActionParameter(
         'local-file',
         required=True,
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
+        metavar='LOCAL_FILE_PATH_WITH_FORMAT',
+        help='Local file path, formatted from CSV columns.'
     ),
     branch: ActionParameter(
         'branch',
         default='master',
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
+        metavar='BRANCH_WITH_FORMAT',
+        help='Repository branch, formatted from CSV columns.'
     ),
-    deadline: ActionParameter(
+    deadline: DateTimeActionParameter(
         'deadline',
         default='now',
-        metavar='PROJECT_PATH_WITH_FORMAT',
-        help='Project path, formatted from CSV columns.'
+        metavar='YYYY-MM-DDTHH:MM:SSZ',
+        help='Submission deadline (defaults to now).'
     ),
     blacklist: ActionParameter(
         'blacklist',
@@ -1089,9 +1089,6 @@ def action_get_file(
     """
     Get file from multiple repositories.
     """
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
 
     commit_filter = get_commit_author_email_filter(blacklist)
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
@@ -1126,7 +1123,7 @@ def action_put_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     users: UserListParameter(False),
-    dry_run: DryRunParameter(),
+    dry_run: DryRunActionParameter(),
     project_template: ActionParameter(
         'project',
         required=True,
@@ -1263,15 +1260,15 @@ def action_get_last_pipeline(
     result = {}
     pipeline_states_only = []
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        pipelines = project.pipelines.list()
-        if len(pipelines) == 0:
+        pipelines = project.pipelines.list(iterator=True)
+        last_pipeline = next(pipelines, None)
+
+        if not last_pipeline:
             result[project.path_with_namespace] = {
                 "status": "none"
             }
             pipeline_states_only.append("none")
             continue
-
-        last_pipeline = pipelines[0]
 
         entry = {
             "status": last_pipeline.status,
@@ -1281,7 +1278,7 @@ def action_get_last_pipeline(
         }
         pipeline_states_only.append(last_pipeline.status)
 
-        for job in last_pipeline.jobs.list():
+        for job in last_pipeline.jobs.list(iterator=True):
             entry["jobs"].append({
                 "status": job.status,
                 "id": job.id,
@@ -1295,7 +1292,7 @@ def action_get_last_pipeline(
         states_len = len(pipeline_states_only)
         for state, count in summary_by_overall_status.most_common():
             print("{}: {} ({:.0f}%)".format(state, count, 100 * count / states_len))
-        print("total: {}".format(states_len))
+        print(f"total: {states_len}")
     else:
         print(json.dumps(result, indent=4))
 
@@ -1314,30 +1311,26 @@ def action_get_pipeline_at_commit(
         'commit',
         default=None,
         metavar='COMMIT_WITH_FORMAT',
-        help='Commit to read pipeline status at.'
+        help='Commit to read pipeline status at, formatted from CSV columns.'
     ),
 ):
     """
-    Get pipeline status of multiple projects at or prior to specified commit, ignoring skipped pipelines.
+    Get pipeline status of multiple projects at or prior to specified
+    commit while ignoring skipped pipelines.
     """
 
     result = {}
     for user, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        pipelines = project.pipelines.list()
-
-        if commit:
-            commit_sha = commit.format(**user.row)
-        else:
-            commit_sha = None
+        commit_sha = commit.format(**user.row) if commit else None
 
         found_commit = False
         found_pipeline = None
-
-        for pipeline in pipelines:
+        for pipeline in project.pipelines.list(iterator=True):
             if not commit_sha:
                 found_commit = True
             elif pipeline.sha == commit_sha:
                 found_commit = True
+
             if not found_commit:
                 continue
 
@@ -1360,7 +1353,7 @@ def action_get_pipeline_at_commit(
                         "id": job.id,
                         "name": job.name,
                     }
-                    for job in found_pipeline.jobs.list()
+                    for job in found_pipeline.jobs.list(iterator=True)
                 ],
             }
 
@@ -1392,7 +1385,7 @@ def action_deadline_commits(
         metavar='TAG_WITH_FORMAT',
         help='Prefer commit with this tag (but also before deadline).'
     ),
-    deadline: ActionParameter(
+    deadline: DateTimeActionParameter(
         'deadline',
         default='now',
         metavar='YYYY-MM-DDTHH:MM:SSZ',
@@ -1427,16 +1420,9 @@ def action_deadline_commits(
     Get last commits before deadline.
     """
 
-    if output_filename:
-        output = open(output_filename, 'w')
-    else:
-        output = sys.stdout
-
-    if deadline == 'now':
-        deadline = time.strftime('%Y-%m-%dT%H:%M:%S%z')
-
     commit_filter = get_commit_author_email_filter(blacklist)
 
+    output = open(output_filename, 'w') if output_filename else sys.stdout
     print(output_header, file=output)
 
     for user, project in as_existing_gitlab_projects(glb, users, project_template):
@@ -1478,7 +1464,7 @@ def action_commit_stats(
 
     result = []
     for _, project in as_existing_gitlab_projects(glb, users, project_template, False):
-        commits = project.commits.list(all=True, as_list=False)
+        commits = project.commits.list(all=True, iterator=True)
         commit_details = {}
         for c in commits:
             info = project.commits.get(c.id)
