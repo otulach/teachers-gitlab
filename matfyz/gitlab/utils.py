@@ -116,6 +116,10 @@ def wait_for_project_to_be_forked(glb, project_path, timeout=None):
         project = get_canonical_project(glb, project.path_with_namespace)
 
 
+@retry_on_exception(
+    'Failed to fork project, will retry...',
+    [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, gitlab.exceptions.GitlabHttpError]
+)
 def fork_project_idempotent(glb, parent, fork_namespace, fork_name):
     """
     Fork existing project or nothing if already forked.
