@@ -1027,6 +1027,40 @@ def _project_get_member(project, user):
         return None
 
 
+@register_command('project-settings')
+def action_put_file(
+    glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
+    entries: ActionEntriesParameter(),
+    dry_run: DryRunActionParameter(),
+    project_template: RequiredProjectActionParameter(),
+    mr_default_target: ActionParameter(
+        'merge-request-default-target',
+        default=None,
+        choices=['self', 'upstream'],
+        help='Which project to merge to by default.',
+    )
+):
+    """
+    Change project settings.
+    """
+
+    change_mr_default_target = mr_default_target is not None
+    mr_default_target_is_self = mr_default_target == 'self'
+
+    for entry, project in entries.as_gitlab_projects(glb, project_template):
+        if change_mr_default_target:
+            is_self = project.mr_default_target_self
+            logger.debug("Project %s: mr_default_target_self=%s.", project.path_with_namespace, is_self)
+            if mr_default_target_is_self != is_self:
+                if not dry_run:
+                    project.mr_default_target_self = mr_default_target_is_self
+                    project.save()
+                logger.info("Changed default merge request target in %s to %s", project.path_with_namespace, mr_default_target)
+            else:
+                logger.info("Default merge request target in %s is already set to %s", project.path_with_namespace, mr_default_target)
+
+
 @register_command('get-file')
 def action_get_file(
     glb: GitlabInstanceParameter(),
