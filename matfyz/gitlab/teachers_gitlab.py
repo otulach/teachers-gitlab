@@ -119,6 +119,13 @@ class ActionEntries:
         self.entries = entries
         self.logger = logging.getLogger('action-entries')
 
+    def as_items(self):
+        """
+        Return entries as-is.
+        """
+        for entry in self.entries:
+            yield entry
+
     def as_gitlab_user(self, entry, glb: gitlab.client.Gitlab, login_column: str):
         if user_login := entry.get(login_column):
             matching_users = glb.users.list(username=user_login, iterator=True)
@@ -439,6 +446,7 @@ class CommandParser:
 @register_command('accounts')
 def action_accounts(
     glb: GitlabInstanceParameter(),
+    logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
     login_column: LoginColumnActionParameter(),
     show_summary: ActionParameter(
@@ -446,12 +454,31 @@ def action_accounts(
         default=False,
         action='store_true',
         help='Show summary numbers.'
+    ),
+    check_renamed_accounts: ActionParameter(
+        'check-renamed-accounts',
+        default=False,
+        action='store_true',
+        help='Try for possibly renamed accounts (e.g. with 1 appended to login).'
     )
 ):
     """
     List accounts that were not found.
     """
     users = list(entries.as_gitlab_users(glb, login_column))
+    if check_renamed_accounts:
+        for entry in entries.as_items():
+            if not (user_login := entry.get(login_column)):
+                continue
+            matching_users = glb.users.list(username=user_login, iterator=True)
+            if next(matching_users, None):
+                continue
+            for suffix in ['1', '2', '3', '11']:
+                login_with_suffix = user_login + suffix
+                matching_users = glb.users.list(username=login_with_suffix, iterator=True)
+                if not (user_obj := next(matching_users, None)):
+                    continue
+                logger.warning("User %s not found, but account for %s exists.", user_login, login_with_suffix)
     if show_summary:
         entries_total = len(users)
         users_found = len([u for _, u in users if u])
