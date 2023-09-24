@@ -1055,7 +1055,7 @@ def _project_get_member(project, user):
 
 
 @register_command('project-settings')
-def action_put_file(
+def action_project_settings(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
