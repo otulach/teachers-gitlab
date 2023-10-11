@@ -567,11 +567,11 @@ def action_fork(
     logger: LoggerParameter(),
     entries: ActionEntriesParameter(),
     login_column: LoginColumnActionParameter(),
-    from_project: ActionParameter(
+    from_project_template: ActionParameter(
         'from',
         required=True,
-        metavar='REPO_PATH',
-        help='Parent repository path.'
+        metavar='REPO_PATH_WITH_FORMAT',
+        help='Parent repository path, formatted from CSV columns.'
     ),
     to_project_template: ActionParameter(
         'to',
@@ -593,15 +593,15 @@ def action_fork(
     )
 ):
     """
-    Fork one repository multiple times.
+    Fork one (or more) repositories multiple times.
     """
-
-    from_project = mg.get_canonical_project(glb, from_project)
 
     for entry, user in entries.as_gitlab_users(glb, login_column):
         if not user and not include_nonexistent:
             # Skip forking for non-existent users
             continue
+
+        from_project = mg.get_canonical_project(glb, from_project_template.format(**entry))
 
         user_name = user.username if user else entry.get(login_column)
         to_full_path = to_project_template.format(**entry)
