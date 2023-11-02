@@ -196,7 +196,8 @@ class ActionEntries:
 class ActionEntriesParameter(Parameter):
     """
     Parameter annotation to mark action entries for template expansion. If the
-    entries represent users, they must contain a column with user login.
+    entries represent users, they must contain a column with user login. The
+    entries are read from standard input if '-' is given as file name.
     """
     def __init__(self):
         Parameter.__init__(self)
@@ -212,10 +213,14 @@ class ActionEntriesParameter(Parameter):
 
     def get_value(self, argument_name, glb, parsed_options):
         logger = logging.getLogger('action-entries')
-        with open(parsed_options.entries_csv) as entries_csv:
-            entries = csv.DictReader(entries_csv)
-            logger.debug(f"Loaded entries with columns {entries.fieldnames}")
-            return ActionEntries(list(entries))
+        if (parsed_options.entries_csv == '-'):
+            entries = csv.DictReader(sys.stdin)
+        else:
+            with open(parsed_options.entries_csv) as entries_csv:
+                entries = csv.DictReader(entries_csv)
+
+        logger.debug(f"Loaded entries with columns {entries.fieldnames}")
+        return ActionEntries(list(entries))
 
 
 class ActionParameter(Parameter):
