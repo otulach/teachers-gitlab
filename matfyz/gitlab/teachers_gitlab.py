@@ -212,15 +212,19 @@ class ActionEntriesParameter(Parameter):
         )
 
     def get_value(self, argument_name, glb, parsed_options):
+        def _load_entries(csv_file):
+            reader = csv.DictReader(csv_file)
+            logger.debug(f"Loaded entries with columns {reader.fieldnames}")
+            return list(reader)
+
         logger = logging.getLogger('action-entries')
         if (parsed_options.entries_csv == '-'):
-            entries = csv.DictReader(sys.stdin)
+            entries = _load_entries(sys.stdin)
         else:
             with open(parsed_options.entries_csv) as entries_csv:
-                entries = csv.DictReader(entries_csv)
+                entries = _load_entries(entries_csv)
 
-        logger.debug(f"Loaded entries with columns {entries.fieldnames}")
-        return ActionEntries(list(entries))
+        return ActionEntries(entries)
 
 
 class ActionParameter(Parameter):
