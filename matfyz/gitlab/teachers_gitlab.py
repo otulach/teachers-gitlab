@@ -1075,6 +1075,12 @@ def action_project_settings(
         default=None,
         choices=['self', 'upstream'],
         help='Which project to merge to by default.',
+    ),
+    description: ActionParameter(
+        'description',
+        metavar="DESCRIPTION_TEXT",
+        default=None,
+        help='The description of the project, formatted from CSV columns.'
     )
 ):
     """
@@ -1083,6 +1089,8 @@ def action_project_settings(
 
     change_mr_default_target = mr_default_target is not None
     mr_default_target_is_self = mr_default_target == 'self'
+
+    change_description = description is not None
 
     for entry, project in entries.as_gitlab_projects(glb, project_template):
         if change_mr_default_target:
@@ -1095,6 +1103,13 @@ def action_project_settings(
                 logger.info("Changed default merge request target in %s to %s", project.path_with_namespace, mr_default_target)
             else:
                 logger.info("Default merge request target in %s is already set to %s", project.path_with_namespace, mr_default_target)
+        if change_description:
+            new_description = description.format(**entry)
+            if not dry_run:
+                project.description = new_description
+                project.save()
+            logger.info("Changed description to %s", new_description)
+
 
 
 @register_command('get-file')
