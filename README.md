@@ -6,18 +6,13 @@ student and massively fork, clone or upload files to them.
 
 ## Installation
 
-It is possible to install the script via:
+The following command will install `teachers_gitlab` command to a
+system-wide installation directory (installation in a virtual environment
+is also possible).
 
 ```shell
-pip install -r requirements.txt
-./setup.py build
-./setup.py install
+pip install git+https://gitlab.mff.cuni.cz/teaching/utils/teachers-gitlab
 ```
-
-This will give you `teachers_gitlab` on your `$PATH`. You can also
-use `virtualenv` to test locally or use the provided shell script
-wrapper (as used in the examples) which sets up a virtual
-environment automatically.
 
 ## Configuration
 
@@ -48,16 +43,29 @@ email,login,number
 student1@mff.cuni.cz,student1,1
 student2@mff.cuni.cz,student2,2
 ```
+
 ## Template parameters
 
 Some command line parameters accept a template value that is
 really a Python format string. Where applicable, these template
-arguments are evaluated for each user record, providing some 
+arguments are evaluated for each user record, providing some
 usage flexibility, especially when it comes to mass operations.
 
 For example, using `--project student-{login}` in an action such
 as **add-member** will perform the operation on multiple projects
 corresponding to user login names.
+
+## Development
+
+For development we recommend to work in a virtual environment and install
+pinned versions of the dependencies.
+
+```shell
+python3 -m venv venv
+. ./venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
 
 
 ## `fork`

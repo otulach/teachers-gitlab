@@ -1,16 +1,11 @@
-default:
-  image: python:3.8
-  before_script:
-    #- apt-get -qq update
-    #- apt-get -qq install -y python3-pip
-    - pip install -r requirements.txt
 
+# Smoke test that installation works and we can at least print help
 print-help:
+  image: python:${PYTHON_VERSION}
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.8", "3.9", "3.10", "3.11", "3.12"]
   script:
-    - ./teachers_gitlab.sh help
-
-install-print-help:
-  script:
-    - ./setup.py build
-    - ./setup.py install
+    - python3 --version
+    - pip install .
     - teachers_gitlab help
