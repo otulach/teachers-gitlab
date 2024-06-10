@@ -1,6 +1,10 @@
-image: python:3.8
 
-print-help:
+# Smoke test that installation works and we can at least print help
+smoke:
+  image: python:${PYTHON_VERSION}
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.8", "3.9", "3.10", "3.11", "3.12"]
   script:
-    - pip install -e .
+    - pip install .
     - teachers_gitlab help
