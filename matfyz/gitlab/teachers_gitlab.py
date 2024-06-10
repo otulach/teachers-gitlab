@@ -22,6 +22,7 @@ import os
 import pathlib
 import re
 import sys
+import textwrap
 
 import gitlab
 
@@ -30,7 +31,7 @@ import matfyz.gitlab.utils as mg
 _registered_commands = []
 
 
-def register_command(name):
+def register_command(name, brief=None):
     """
     Decorator for function representing an actual command.
 
@@ -43,8 +44,10 @@ def register_command(name):
         """
         _registered_commands.append({
             'name': name,
+            'brief': brief,
             'func': func
         })
+        func._command_name = name
 
         def wrapper(*args, **kwargs):
             """
@@ -112,6 +115,18 @@ class LoggerParameter(Parameter):
 
     def get_value(self, argument_name, glb, parsed_options):
         return logging.getLogger(parsed_options.command_name_)
+
+
+class IntrospectionParameter(Parameter):
+    """
+    Parameter annotation to introspect the parser itself.
+    """
+
+    def __init__(self):
+        Parameter.__init__(self)
+
+    def get_value(self, argument_name, glb, parsed_options):
+        return parsed_options.parser
 
 
 class ActionEntries:
@@ -402,6 +417,8 @@ class CommandParser:
 
         self.parsed_options = None
 
+        self.subcommands = {}
+
     def add_command(self, name, callback_func):
         """
         Add whole subcommand.
@@ -409,10 +426,10 @@ class CommandParser:
 
         short_help = callback_func.__doc__
         if short_help is not None:
-            short_help = short_help.strip().split("\n")[0]
+            short_help = textwrap.dedent(short_help.strip())
         parser = self.args_sub.add_parser(
             name,
-            help=short_help,
+            description=short_help,
             parents=[self.args_common]
         )
         for dest, param in callback_func.__annotations__.items():
@@ -426,6 +443,9 @@ class CommandParser:
 
         parser.set_defaults(func=lambda glb, cfg: wrapper(glb, cfg, callback_func))
         parser.set_defaults(command_name_=name)
+        parser.set_defaults(parser=self)
+
+        self.subcommands[name] = parser
 
     def parse_args(self, argv):
         """
@@ -439,11 +459,15 @@ class CommandParser:
 
         return self.parsed_options
 
-    def print_help(self):
+    def print_help(self, subcommand=None):
         """
         Wrapper around argparse.print_help.
         """
-        self.args.print_help()
+
+        if subcommand is None:
+            self.args.print_help()
+        else:
+            self.subcommands[subcommand].print_help()
 
     def get_gitlab_instance(self):
         return gitlab.Gitlab.from_config(
@@ -452,7 +476,7 @@ class CommandParser:
         )
 
 
-@register_command('accounts')
+@register_command('accounts', 'Validate accounts existence')
 def action_accounts(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -514,7 +538,7 @@ def get_commit_author_email_filter(blacklist):
     return get_regex_blacklist_filter(blacklist, lambda commit: commit.author_email)
 
 
-@register_command('clone')
+@register_command('clone', 'Clone a project to a local directory')
 def action_clone(
     glb: GitlabInstanceParameter(),
     entries: ActionEntriesParameter(),
@@ -570,7 +594,7 @@ def action_clone(
         mg.reset_to_commit(local_path, last_commit.id)
 
 
-@register_command('fork')
+@register_command('fork', 'Fork a project')
 def action_fork(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -630,7 +654,7 @@ def action_fork(
             mg.remove_fork_relationship(glb, to_project)
 
 
-@register_command('protect')
+@register_command('protect', 'Protect a Git branch')
 def action_protect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -716,7 +740,7 @@ def _project_protect_branch(project, branch_name, merge_access_level, push_acces
     })
 
 
-@register_command('unprotect')
+@register_command('unprotect', 'Unprotect a Git branch')
 def action_unprotect_branch(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -760,7 +784,7 @@ def _project_get_protected_branch(project, branch_name):
         return None
 
 
-@register_command('create-tag')
+@register_command('create-tag', 'Create a Git tag')
 def action_create_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -812,7 +836,7 @@ def action_create_tag(
                 raise
 
 
-@register_command('protect-tag')
+@register_command('protect-tag', 'Set tag protection')
 def action_protect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -886,7 +910,7 @@ def _project_protect_tag(project, tag_name, create_access_level, logger):
     })
 
 
-@register_command('unprotect-tag')
+@register_command('unprotect-tag', 'Unset tag protection')
 def action_unprotect_tag(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -930,7 +954,7 @@ def _project_get_protected_tag(project, tag_name):
         return None
 
 
-@register_command('get-members')
+@register_command('get-members', 'Get project members')
 def action_members(
     glb: GitlabInstanceParameter(),
     project: ActionParameter(
@@ -958,7 +982,7 @@ def action_members(
         print(f"{member.username},{member.name}")
 
 
-@register_command('add-member')
+@register_command('add-member', 'Add a project member')
 def action_add_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -1020,7 +1044,7 @@ def _project_add_member(project, user, access_level, logger):
         })
 
 
-@register_command('remove-member')
+@register_command('remove-member', 'Remove project member')
 def action_remove_member(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -1063,7 +1087,7 @@ def _project_get_member(project, user):
         return None
 
 
-@register_command('project-settings')
+@register_command('project-settings', 'Change project settings')
 def action_project_settings(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -1112,7 +1136,7 @@ def action_project_settings(
 
 
 
-@register_command('get-file')
+@register_command('get-file', 'Fetch given files')
 def action_get_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -1181,7 +1205,7 @@ def action_get_file(
                 f.write(current_content)
 
 
-@register_command('put-file')
+@register_command('put-file', 'Mass file upload')
 def action_put_file(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -1286,7 +1310,7 @@ def action_put_file(
             logger.info("No change in %s at %s.", local_file, project.path_with_namespace)
 
 
-@register_command('get-last-pipeline')
+@register_command('get-last-pipeline', 'Get last pipeline status')
 def action_get_last_pipeline(
     glb: GitlabInstanceParameter(),
     entries: ActionEntriesParameter(),
@@ -1342,7 +1366,7 @@ def action_get_last_pipeline(
         print(json.dumps(result, indent=4))
 
 
-@register_command('get-pipeline-at-commit')
+@register_command('get-pipeline-at-commit', 'Get pipeline status for a commit')
 def action_get_pipeline_at_commit(
     glb: GitlabInstanceParameter(),
     entries: ActionEntriesParameter(),
@@ -1402,7 +1426,7 @@ def action_get_pipeline_at_commit(
     print(json.dumps(result, indent=4))
 
 
-@register_command('deadline-commit')
+@register_command('deadline-commit', 'Get commits for a deadline')
 def action_deadline_commits(
     glb: GitlabInstanceParameter(),
     logger: LoggerParameter(),
@@ -1481,7 +1505,7 @@ def action_deadline_commits(
         output.close()
 
 
-@register_command('commit-stats')
+@register_command('commit-stats', 'Get basic commit statistics')
 def action_commit_stats(
     glb: GitlabInstanceParameter(),
     entries: ActionEntriesParameter(),
@@ -1511,6 +1535,30 @@ def action_commit_stats(
         })
 
     print(json.dumps(result, indent=4))
+
+
+@register_command('help-markdown', 'Generate Markdown documentation for all commands.')
+def action_help_in_markdown(
+    glb: GitlabInstanceParameter(),
+    parser: IntrospectionParameter(),
+):
+    """
+    Prints full help in Markdown format.
+    """
+
+    # Ensure stable formatting
+    os.environ["COLUMNS"] = "80"
+
+    print("# Teachers GitLab command help")
+    print()
+    print('This help is produced by calling help-markdown subcommand.')
+    print()
+
+    for cmd in get_registered_commands():
+        print('\n\n## {}'.format(cmd['brief'] if cmd['brief'] else cmd['name']))
+        print('\n```')
+        parser.print_help(cmd['name'])
+        print('```')
 
 
 def init_logging(logging_level):
