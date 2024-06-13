@@ -2,7 +2,6 @@ certifi==2024.6.2
 charset-normalizer==3.3.2
 dateparser==1.2.0
 idna==3.7
--e git+ssh://git@gitlab.mff.cuni.cz/teaching/utils/teachers-gitlab.git@78d82eb102f2db9ee109fe5968d2bef48a2a9d92#egg=matfyz_teachers_gitlab
 python-dateutil==2.9.0.post0
 python-gitlab==4.6.0
 pytz==2024.1
