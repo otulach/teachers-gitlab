@@ -31,6 +31,9 @@ def retries(
     if (n is None) and (timeout is None):
         raise Exception("Specify either n or timeout for retries")
 
+    if (n is not None) and (timeout is not None):
+        interval = timeout / n
+
     if timeout is None:
         timeout = n * interval
     remaining = timeout
