@@ -8,11 +8,16 @@ student and massively fork, clone or upload files to them.
 
 The following command will install `teachers_gitlab` command to a
 system-wide installation directory (installation in a virtual environment
-is also possible).
+is also possible, see development notes below, please).
 
 ```shell
 pip install git+https://gitlab.mff.cuni.cz/teaching/utils/teachers-gitlab
 ```
+
+Note: we use modern `pyproject.toml`-based installation that is not possible
+with older versions of `pip`. We highly recommend to first upgrade pip to
+latest version (version as old as `pip install pip==22.0` seems to work)
+and then execute the above command.
 
 ## Configuration
 
