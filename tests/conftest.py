@@ -2,8 +2,9 @@
 import responses
 import pytest
 
-import mocks_gitlab_api
 import mocks_bits
+import mocks_entries
+import mocks_gitlab_api
 
 @pytest.fixture
 def mocked_responses():
@@ -22,3 +23,9 @@ def mock_gitlab(mocked_responses):
 @pytest.fixture(autouse=True)
 def quick_retries(mocker):
     mocker.patch('matfyz.gitlab.utils.retries', mocks_bits.mock_retries)
+
+@pytest.fixture
+def mock_entries():
+    res = mocks_entries.MockEntriesFactory()
+    yield res
+

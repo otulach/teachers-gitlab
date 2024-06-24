@@ -3,15 +3,7 @@ import logging
 
 import matfyz.gitlab.teachers_gitlab as tg
 
-class MockEntries:
-    def __init__(self, entries):
-        self.entries = entries
-
-    def as_gitlab_users(self, _glb, login_column):
-        for entry in self.entries:
-            yield entry, None
-
-def test_fork_one(mock_gitlab):
+def test_fork_one(mock_gitlab, mock_entries):
     mock_gitlab.on_api_get(
         'projects/' + mock_gitlab.escape_path_in_url('base/repo'),
         response_json={
@@ -63,7 +55,9 @@ def test_fork_one(mock_gitlab):
     tg.action_fork(
         mock_gitlab.get_python_gitlab(),
         logging.getLogger("fork"),
-        MockEntries([{'login': 'alpha'}]),
+        mock_entries.create([
+            {'login': 'alpha'},
+        ]),
         'login',
         'base/repo',
         'student/{login}',
