@@ -6,32 +6,36 @@ import re
 import gitlab
 import responses
 
-def dumping_callback(req):
-    logging.getLogger('DUMPER').error("URL not mocked: %s %s", req.method, req.url)
-    return (404, {}, json.dumps({"error": "not implemented"}))
-
-
 class MockedGitLabApi:
     def __init__(self, rsps):
         self.base_url = "http://localhost/"
+        self.unknown_urls = []
         rsps.start()
 
         self.responses = rsps
         self.logger = logging.getLogger("mocked-api")
 
     def report_unknown(self):
-        self.responses.add_callback(
-            responses.GET,
-            re.compile("http://localhost/api/v4/.*"),
-            callback=dumping_callback,
-        )
-        self.responses.add_callback(
-            responses.POST,
-            re.compile("http://localhost/api/v4/.*"),
-            callback=dumping_callback,
-        )
-        self.responses.registered()[-1]._calls.add_call(None)
-        self.responses.registered()[-2]._calls.add_call(None)
+        def dumping_callback(req):
+            log_line = f"{req.method} {req.url}"
+            logging.getLogger('DUMPER').error("URL not mocked: %s", log_line)
+            self.unknown_urls.append(log_line)
+            return (404, {}, json.dumps({"error": "not implemented"}))
+
+        methods = [responses.GET, responses.POST, responses.DELETE]
+        for m in methods:
+            self.responses.add_callback(
+                m,
+                re.compile("http://localhost/api/v4/.*"),
+                callback=dumping_callback,
+            )
+        for i, _ in enumerate(methods):
+            self.responses.registered()[-(i + 1)]._calls.add_call(None)
+
+    def shutdown(self):
+        if self.unknown_urls:
+            unknowns = ', '.join(self.unknown_urls)
+            raise Exception(f"Following URLs were not mocked: {unknowns}.")
 
     def make_api_url_(self, suffix):
         return self.base_url + "api/v4/" + suffix

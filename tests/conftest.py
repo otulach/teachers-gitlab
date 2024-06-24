@@ -19,6 +19,7 @@ def mock_gitlab(mocked_responses):
     """
     res = mocks_gitlab_api.MockedGitLabApi(mocked_responses)
     yield res
+    res.shutdown()
 
 @pytest.fixture(autouse=True)
 def quick_retries(mocker):
@@ -28,4 +29,3 @@ def quick_retries(mocker):
 def mock_entries():
     res = mocks_entries.MockEntriesFactory()
     yield res
-
