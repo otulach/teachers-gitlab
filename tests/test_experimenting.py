@@ -1,16 +1,5 @@
 
 import logging
-import re
-import time
-
-import pytest
-
-import json
-
-import gitlab
-import responses
-import requests
-from responses import _recorder
 
 import matfyz.gitlab.teachers_gitlab as tg
 
