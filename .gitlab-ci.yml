@@ -9,3 +9,12 @@ print-help:
     - python3 --version
     - pip install .
     - teachers_gitlab help
+
+# Basic run of pytest-based tests
+pytest:
+  image: python:3.12
+  script:
+    - python3 --version
+    - pip install -r requirements.txt
+    - pip install -r requirements-dev.txt
+    - env PYTHONPATH=. pytest -vvv tests/
