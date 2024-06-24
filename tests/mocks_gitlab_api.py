@@ -59,7 +59,6 @@ class MockedGitLabApi:
             result = self.responses.get(full_url, *args, **kwargs)
             result._calls.add_call(None)
 
-
     def on_api_post(self, url, request_json, response_json, *args, **kwargs):
         kwargs['body'] = json.dumps(response_json)
         kwargs['match'] = [
@@ -68,6 +67,13 @@ class MockedGitLabApi:
         kwargs['content_type'] = 'application/json'
 
         return self.responses.post(
+            self.make_api_url_(url),
+            *args,
+            **kwargs,
+        )
+
+    def on_api_delete(self, url, *args, **kwargs):
+        return self.responses.delete(
             self.make_api_url_(url),
             *args,
             **kwargs,
