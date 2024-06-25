@@ -19,17 +19,7 @@ def test_unprotect_unprotected_branch(mock_gitlab):
 
     mock_gitlab.on_api_get(
         'projects/21/protected_branches/feature',
-        response_json={
-            'id': 1,
-            'name': 'feature',
-            'push_access_levels': [],
-            'merge_access_levels': [],
-            'allow_force_push': False,
-        },
-    )
-
-    mock_gitlab.on_api_delete(
-        'projects/21/protected_branches/feature'
+        response_404=True,
     )
 
     mock_gitlab.report_unknown()
