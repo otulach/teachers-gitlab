@@ -47,6 +47,17 @@ class MockedGitLabApi:
     def get_python_gitlab(self):
         return gitlab.Gitlab(self.base_url, oauth_token="mock_token")
 
+    def register_project(self, numerical_id, full_project_path):
+        self.on_api_get(
+            'projects/' + self.escape_path_in_url(full_project_path),
+        response_json={
+            'id': numerical_id,
+            'path_with_namespace': full_project_path
+        },
+        helper=True,
+    )
+
+
     def on_api_get(self, url, response_json=None, response_404=False, helper=False, *args, **kwargs):
         full_url = self.make_api_url_(url)
 

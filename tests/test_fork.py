@@ -4,14 +4,7 @@ import logging
 import matfyz.gitlab.teachers_gitlab as tg
 
 def test_fork_one(mock_gitlab, mock_entries):
-    mock_gitlab.on_api_get(
-        'projects/' + mock_gitlab.escape_path_in_url('base/repo'),
-        response_json={
-            'id': 42,
-            'path_with_namespace': 'base/repo'
-        },
-        helper=True,
-    )
+    mock_gitlab.register_project(42, 'base/repo')
 
     mock_gitlab.on_api_post(
         'projects/42/fork',

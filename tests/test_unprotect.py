@@ -8,14 +8,7 @@ def test_unprotect_unprotected_branch(mock_gitlab):
         {'login': 'alpha'},
     ]
 
-    mock_gitlab.on_api_get(
-        'projects/' + mock_gitlab.escape_path_in_url('student/alpha'),
-        response_json={
-            'id': 21,
-            'path_with_namespace': 'student/alpha'
-        },
-        helper=True,
-    )
+    mock_gitlab.register_project(21, 'student/alpha')
 
     mock_gitlab.on_api_get(
         'projects/21/protected_branches/feature',
@@ -38,14 +31,7 @@ def test_unprotect_protected_branch(mock_gitlab):
         {'login': 'alpha'},
     ]
 
-    mock_gitlab.on_api_get(
-        'projects/' + mock_gitlab.escape_path_in_url('forks/alpha'),
-        response_json={
-            'id': 20,
-            'path_with_namespace': 'forks/alpha'
-        },
-        helper=True,
-    )
+    mock_gitlab.register_project(20, 'forks/alpha')
 
     mock_gitlab.on_api_get(
         'projects/20/protected_branches/' + mock_gitlab.escape_path_in_url('protected/feature'),
