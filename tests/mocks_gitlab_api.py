@@ -47,10 +47,18 @@ class MockedGitLabApi:
     def get_python_gitlab(self):
         return gitlab.Gitlab(self.base_url, oauth_token="mock_token")
 
-    def on_api_get(self, url, response_json, helper=False, *args, **kwargs):
+    def on_api_get(self, url, response_json=None, response_404=False, helper=False, *args, **kwargs):
         full_url = self.make_api_url_(url)
 
-        kwargs['json'] = response_json
+        if response_404:
+            assert response_json is None, "Cannot specify response_404 and response_json"
+            kwargs['json'] = {
+                "message": "404 Not Found",
+            }
+            kwargs['status'] = 404
+        else:
+            assert response_json is not None
+            kwargs['json'] = response_json
 
         if not helper:
             return self.responses.get(full_url, *args, **kwargs)
