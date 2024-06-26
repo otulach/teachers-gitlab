@@ -54,4 +54,5 @@ Table of Contents
    :maxdepth: 2
 
    install
+   commands/index
    development
