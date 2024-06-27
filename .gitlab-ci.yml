@@ -17,4 +17,4 @@ pytest:
     - python3 --version
     - pip install -r requirements.txt
     - pip install -r requirements-dev.txt
-    - env PYTHONPATH=. pytest -vvv tests/
+    - env PYTHONPATH=src pytest -vvv tests/

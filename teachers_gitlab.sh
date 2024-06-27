@@ -29,9 +29,8 @@ REQ_FILE="$BASE_DIR/requirements.txt"
 }
 
 #
-# Add the script's base directory to PYTHONPATH so that it
-# can access the "matfyz" module without installation.
+# Setup PYTHONPATH for the teachers_gitlab module.
 #
 exec env \
-    PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}$BASE_DIR" \
-    "$VENV_DIR/bin/python3" -m matfyz.gitlab.teachers_gitlab "$@"
+    PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}$BASE_DIR/src" \
+    "$VENV_DIR/bin/python3" -m teachers_gitlab.main "$@"

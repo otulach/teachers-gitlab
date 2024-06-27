@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "matfyz-teachers-gitlab"
+name = "teachers-gitlab"
 version = "0.1"
 authors = [
     {name = "Vojtech Horky", email = "horky@d3s.mff.cuni.cz"},
@@ -26,5 +26,9 @@ dependencies = [
     "python-gitlab >= 3.6.0",
 ]
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+
 [project.scripts]
-teachers_gitlab = "matfyz.gitlab.teachers_gitlab:main"
+teachers_gitlab = "teachers_gitlab.main:main"

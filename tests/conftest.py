@@ -23,7 +23,7 @@ def mock_gitlab(mocked_responses):
 
 @pytest.fixture(autouse=True)
 def quick_retries(mocker):
-    mocker.patch('matfyz.gitlab.utils.retries', mocks_bits.mock_retries)
+    mocker.patch('teachers_gitlab.utils.retries', mocks_bits.mock_retries)
 
 @pytest.fixture
 def mock_entries():

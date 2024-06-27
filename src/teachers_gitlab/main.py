@@ -26,7 +26,7 @@ import textwrap
 
 import gitlab
 
-import matfyz.gitlab.utils as mg
+import teachers_gitlab.utils as mg
 
 _registered_commands = []
 

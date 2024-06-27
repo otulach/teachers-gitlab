@@ -1,7 +1,7 @@
 
 import logging
 
-import matfyz.gitlab.teachers_gitlab as tg
+import teachers_gitlab.main
 
 def test_unprotect_branch(mock_gitlab):
     entries = [
@@ -44,10 +44,10 @@ def test_unprotect_branch(mock_gitlab):
     # Perform the unprotection
     mock_gitlab.report_unknown()
 
-    tg.action_unprotect_branch(
+    teachers_gitlab.main.action_unprotect_branch(
         mock_gitlab.get_python_gitlab(),
         logging.getLogger("unprotect"),
-        tg.ActionEntries(entries),
+        teachers_gitlab.main.ActionEntries(entries),
         'course/{group}-{login}',
         'devel'
     )
@@ -83,10 +83,10 @@ def test_unprotect_branch_with_complex_name(mock_gitlab):
 
     mock_gitlab.report_unknown()
 
-    tg.action_unprotect_branch(
+    teachers_gitlab.main.action_unprotect_branch(
         mock_gitlab.get_python_gitlab(),
         logging.getLogger("unprotect"),
-        tg.ActionEntries(entries),
+        teachers_gitlab.main.ActionEntries(entries),
         'forks/{login}',
         'feature/*'
     )

@@ -1,7 +1,7 @@
 
 import logging
 
-import matfyz.gitlab.teachers_gitlab as tg
+import teachers_gitlab.main
 
 def test_fork_one(mock_gitlab, mock_entries):
     mock_gitlab.register_project(42, 'base/repo')
@@ -45,7 +45,7 @@ def test_fork_one(mock_gitlab, mock_entries):
 
     mock_gitlab.report_unknown()
 
-    tg.action_fork(
+    teachers_gitlab.main.action_fork(
         mock_gitlab.get_python_gitlab(),
         logging.getLogger("fork"),
         mock_entries.create([
