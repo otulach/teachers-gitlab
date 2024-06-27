@@ -2,7 +2,7 @@ Command reference manual
 ========================
 
 Following commands are available (the list might be incomplete, run
-``teachers_gitlab help`` for a full list of commands).
+``teachers-gitlab help`` for a full list of commands).
 
 Templated parameters
 --------------------
@@ -24,7 +24,7 @@ Fork repository for all users given in a CSV file.
 
 .. code-block:: shell
 
-  ./teachers_gitlab.sh fork \
+  teachers-gitlab fork \
     --config-file config.ini \
     --users students.csv \
     --from teaching/course/upstream/template \
@@ -49,7 +49,7 @@ step but allows developers to push and merge
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh protect \
+    teachers-gitlab protect \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -72,7 +72,7 @@ step.
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh unprotect \
+    teachers-gitlab unprotect \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -89,7 +89,7 @@ Typically used for automatically created checkpoint tags.
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh protect-tag \
+    teachers-gitlab protect-tag \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi004/2022/student-{login}" \
@@ -104,7 +104,7 @@ Remove a protected tag (or pattern).
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh unprotect-tag \
+    teachers-gitlab unprotect-tag \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi004/2022/student-{login}" \
@@ -122,7 +122,7 @@ Adding students to their course projects can be done with
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh add-member \
+    teachers-gitlab add-member \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -133,7 +133,7 @@ Adding students to a common project can be done with
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh add-member \
+    teachers-gitlab add-member \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi004/upstream/forum" \
@@ -150,7 +150,7 @@ Removing students from a common project can be done with
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh remove-member \
+    teachers-gitlab remove-member \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi004/2022/upstream/forum"
@@ -160,7 +160,7 @@ Removing students from their course projects can be done with
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh remove-member \
+    teachers-gitlab remove-member \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi004/2022/student-{login}"
@@ -175,7 +175,7 @@ checkout to a specific commit (last before given deadline).
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh clone \
+    teachers-gitlab clone \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -193,7 +193,7 @@ By default, it generates a CSV with logins and commit ids.
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh deadline-commit \
+    teachers-gitlab deadline-commit \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -210,7 +210,7 @@ Get specific file before a given deadline.
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh get-file \
+    teachers-gitlab get-file \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -227,7 +227,7 @@ Get status of last pipeline as JSON.
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh get-file \
+    teachers-gitlab get-file \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}"
@@ -235,7 +235,7 @@ Get status of last pipeline as JSON.
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh get-file \
+    teachers-gitlab get-file \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}" \
@@ -250,7 +250,7 @@ Get status of the first non-skipped pipeline at or prior to specified commit as 
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh get-pipeline-at-commit \
+    teachers-gitlab get-pipeline-at-commit \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2021-summer/student-{login}" \
@@ -265,7 +265,7 @@ Overview of all commits, including line statistics, as JSON.
 
 .. code-block:: shell
 
-    ./teachers_gitlab.sh commit-stats \
+    teachers-gitlab commit-stats \
         --config-file config.ini \
         --users students.csv \
         --project "teaching/nswi177/2020-summer/solution-{number}-{login}"

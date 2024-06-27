@@ -31,4 +31,4 @@ package-dir = {"" = "src"}
 
 
 [project.scripts]
-teachers_gitlab = "teachers_gitlab.main:main"
+teachers-gitlab = "teachers_gitlab.main:main"

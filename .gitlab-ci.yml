@@ -8,7 +8,7 @@ print-help:
   script:
     - python3 --version
     - pip install .
-    - teachers_gitlab help
+    - teachers-gitlab help
 
 # Basic run of pytest-based tests
 pytest:
