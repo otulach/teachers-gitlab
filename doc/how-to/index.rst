@@ -6,3 +6,4 @@ How to ... ?
 
     token
     structure
+    list-of-students

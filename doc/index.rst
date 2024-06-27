@@ -89,6 +89,7 @@ Further reading
    :maxdepth: 2
 
    install
+   first-steps
    commands/index
    how-to/index
    development
