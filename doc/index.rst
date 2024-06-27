@@ -55,4 +55,5 @@ Table of Contents
 
    install
    commands/index
+   how-to/index
    development
