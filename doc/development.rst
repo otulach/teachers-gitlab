@@ -76,7 +76,7 @@ When we run it the test fails with the following:
     Exception: Following URLs were not mocked: GET http://localhost/api/v4/projects/base%2Falpha
 
 At this point we need to consult
-`GitLab API documentation <https://docs.gitlab.com/ee/api/>`_ to see what
+`GitLab API documentation <https://docs.gitlab.com/ee/api/rest>`_ to see what
 API was actually called.
 
 In this case it is easy: the utility first needs to determine that the project
