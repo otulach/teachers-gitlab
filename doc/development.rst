@@ -111,6 +111,12 @@ For this the fixture does not have any special call but it provides the
 function ``on_api_get`` to specify a JSON response for a particular HTTP
 request.
 
+.. warning::
+   The URLs are compared as plain strings without any kind of normalization.
+   Therefore, URLs ``project/42`` and ``project//42`` are different even if
+   they would be treated as the same by a real GitLab server.
+
+
 .. code-block:: python
 
     mock_gitlab.on_api_get(
