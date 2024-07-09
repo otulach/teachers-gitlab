@@ -6,13 +6,13 @@ def test_create_tag(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]
-    
+
     mock_gitlab.register_project(452, 'student/alpha')
-    
+
     mock_gitlab.on_api_post(
         'projects/452/repository/tags',
         request_json={
-            'ref': '', 
+            'ref': '',
             'tag_name': 'tag1'
             },
         response_json={
@@ -30,18 +30,18 @@ def test_create_tag(mock_gitlab):
         '',
         ''
     )
-    
+
 def test_create_existing_tag(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]
-    
+
     mock_gitlab.register_project(452, 'student/alpha')
-    
+
     mock_gitlab.on_api_post(
         'projects/452/repository/tags',
         request_json={
-            'ref': 'double', 
+            'ref': 'double',
             'tag_name': 'tag2'
             },
         response_json={
@@ -59,4 +59,4 @@ def test_create_existing_tag(mock_gitlab):
         'tag2',
         'double',
         ''
-    )   
+    )
