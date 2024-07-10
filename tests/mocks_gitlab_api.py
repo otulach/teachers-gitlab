@@ -52,7 +52,18 @@ class MockedGitLabApi:
             'projects/' + self.escape_path_in_url(full_project_path),
         response_json={
             'id': numerical_id,
-            'path_with_namespace': full_project_path
+            'path_with_namespace': full_project_path,
+        },
+        helper=True,
+    )
+
+    def register_project_with_mr(self, numerical_id, full_project_path):
+        self.on_api_get(
+            'projects/' + self.escape_path_in_url(full_project_path),
+        response_json={
+            'id': numerical_id,
+            'path_with_namespace': full_project_path,
+            'mr_default_target_self' : 'self'
         },
         helper=True,
     )
