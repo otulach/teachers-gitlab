@@ -3,7 +3,7 @@ import logging
 import teachers_gitlab.main as tg
 import gitlab
 
-def test_protect_tag(mock_gitlab):
+def test_protect_tag_with_no_response(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]
@@ -36,7 +36,7 @@ def test_protect_tag(mock_gitlab):
         'devel'
     )
 
-def test_protect_tag(mock_gitlab):
+def test_protect_tag_with_normal_access_level(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]
@@ -68,7 +68,7 @@ def test_protect_tag(mock_gitlab):
         gitlab.const.AccessLevel.DEVELOPER
     )
 
-def test_protect_tag_access(mock_gitlab):
+def test_protect_tag_that_needs_access_level_change(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]

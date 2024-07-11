@@ -2,7 +2,7 @@ import logging
 
 import teachers_gitlab.main as tg
 
-def test_create_tag(mock_gitlab):
+def test_create_tag_that_does_not_exist(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]
