@@ -3,7 +3,7 @@ import logging
 import teachers_gitlab.main as tg
 import gitlab
 
-def test_protect_tag(mock_gitlab):
+def test_protect_tag_with_no_response(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]
@@ -36,7 +36,7 @@ def test_protect_tag(mock_gitlab):
         'devel'
     )
 
-def test_protect_tag(mock_gitlab):
+def test_protect_tag_access_level_developer(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]
@@ -68,7 +68,7 @@ def test_protect_tag(mock_gitlab):
         gitlab.const.AccessLevel.DEVELOPER
     )
 
-def test_protect_tag_access(mock_gitlab):
+def test_protect_tag_changing_access_level(mock_gitlab):
     entries = [
         {'login': 'alpha'},
     ]
@@ -112,4 +112,30 @@ def test_protect_tag_access(mock_gitlab):
         'student/{login}',
         'tag1',
         gitlab.const.AccessLevel.MAINTAINER
+    )
+
+def test_unprotect_tag(mock_gitlab):
+    entries = [
+        {'login': 'alpha'},
+    ]
+
+    mock_gitlab.register_project(452, 'student/alpha')
+
+    mock_gitlab.on_api_get(
+        'projects/452/protected_tags/tag1',
+        response_json={
+             'name': 'tag1'
+         },
+    )
+
+    mock_gitlab.on_api_delete(
+        'projects/452/protected_tags/tag1',
+    )
+
+    tg.action_unprotect_tag(
+        mock_gitlab.get_python_gitlab(),
+        logging.getLogger("protecttag"),
+        tg.ActionEntries(entries),
+        'student/{login}',
+        'tag1'
     )
