@@ -12,15 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* Documentation about writing unit tests (@vhotspur)
-* Basic CI with GitHub Actions (@vhotspur)
-* Unit tests for `create-tag`, `protect-tag`, `project-settings`) (@otulach)
-
 ### Changed
 
 ### Deprecated
 
 ### Removed
+
+
+## v0.2.1 - 2024-08-01
+
+### Added
+
+* Documentation about writing unit tests (@vhotspur)
+* Basic CI with GitHub Actions (@vhotspur)
+* Unit tests for `create-tag`, `protect-tag`, `project-settings`) (@otulach)
 
 
 ## v0.2.0 - 2024-06-27
