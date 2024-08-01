@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment:
+      pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Get current version
+        run: |
+          PACKAGE_VERSION=${GITHUB_REF_NAME#v}
+          echo Releasing version $PACKAGE_VERSION
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+
+      - name: Upgrade pip
+        run: python3 -m pip install --upgrade pip
+
+      - name: Install build
+        run: python3 -m pip install --upgrade build
+
+      - name: Build the package
+        run: python3 -m build
+
+      - name: Setup release notes
+        run: .github/workflows/get-release-notes.sh ${PACKAGE_VERSION} >gh-release-body.txt
+
+      - name: Publish as GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: gh-release-body.txt
+          files: |
+            dist/*.whl
+
+      - name: Publish as PyPI release
+        uses: pypa/gh-action-pypi-publish@v1.9.0
+        with:
+          skip-existing: true
