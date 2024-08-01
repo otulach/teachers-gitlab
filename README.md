@@ -9,7 +9,7 @@ student and massively fork, clone or upload files in all projects at once.
 ## Installation in a nutshell
 
 ```shell
-pip install git+https://gitlab.mff.cuni.cz/teaching/utils/teachers-gitlab
+pip install teachers-gitlab
 ```
 
 Note: we require at least `pip install pip==22.0`; details are in

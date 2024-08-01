@@ -7,7 +7,7 @@ is also possible, see development notes, please).
 
 .. code-block:: shell
 
-    pip install git+https://gitlab.mff.cuni.cz/teaching/utils/teachers-gitlab
+    pip install teachers-gitlab
 
 Note: we use modern `pyproject.toml`-based installation that is not possible
 with older versions of `pip`. We highly recommend to first upgrade pip to
