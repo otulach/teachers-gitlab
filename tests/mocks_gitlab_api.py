@@ -17,12 +17,12 @@ class MockedGitLabApi:
 
     def report_unknown(self):
         def dumping_callback(req):
-            log_line = f"{req.method} {req.url}"
+            log_line = f"{req.method} {req.url} {req.body}"
             logging.getLogger('DUMPER').error("URL not mocked: %s", log_line)
             self.unknown_urls.append(log_line)
             return (404, {}, json.dumps({"error": "not implemented"}))
 
-        methods = [responses.GET, responses.POST, responses.DELETE]
+        methods = [responses.GET, responses.POST, responses.DELETE, responses.PUT]
         for m in methods:
             self.responses.add_callback(
                 m,
@@ -93,6 +93,19 @@ class MockedGitLabApi:
 
     def on_api_delete(self, url, *args, **kwargs):
         return self.responses.delete(
+            self.make_api_url_(url),
+            *args,
+            **kwargs,
+        )
+
+    def on_api_put(self, url, request_json, response_json, *args, **kwargs):
+        kwargs['body'] = json.dumps(response_json)
+        kwargs['match'] = [
+            responses.matchers.json_params_matcher(request_json)
+        ]
+        kwargs['content_type'] = 'application/json'
+
+        return self.responses.put(
             self.make_api_url_(url),
             *args,
             **kwargs,
