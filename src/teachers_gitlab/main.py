@@ -600,9 +600,15 @@ def create_group(
     entries: ActionEntriesParameter(),
     group_name_template: ActionParameter(
         'name',
-        required=True,
+        required=False,
         metavar='NAME_OF_THE_GROUP',
         help='String name of the created group, formatted from CSV columns.'
+    ),
+    path_name_template: ActionParameter(
+        'path',
+        required=True,
+        metavar='NAME_OF_THE_PATH_TO_GROUP',
+        help='String name of the path to the created group, formatted from CSV columns.'
     ),
     parent_group_template: ActionParameter(
         'from',
@@ -614,8 +620,13 @@ def create_group(
     for entry in entries.as_items():
         from_group = mg.get_canonical_group(glb, parent_group_template.format(**entry))
 
-        group_name = group_name_template.format(**entry)
-        group_path = from_group.full_path + '/' + group_name
+        path_name = path_name_template.format(**entry)
+        group_path = from_group.full_path + '/' + path_name
+
+        if group_name_template != None:
+            group_name = group_name_template.format(**entry)
+        else:
+            group_name = path_name
 
         if mg.is_existing_group(glb, group_path):
             logger.info("Group %s already exists.", group_path)
@@ -629,7 +640,7 @@ def create_group(
 
         glb.groups.create({
             'name': group_name,
-            'path': group_name,
+            'path': path_name,
             'parent_id': from_group.id
         })
 
