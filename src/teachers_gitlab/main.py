@@ -602,12 +602,12 @@ def create_group(
         'name',
         required=False,
         metavar='NAME_OF_THE_GROUP',
-        help='String name of the created group, formatted from CSV columns.'
+        help='Group name (title), formatted from CSV columns.'
     ),
-    path_name_template: ActionParameter(
+    path_template: ActionParameter(
         'path',
         required=True,
-        metavar='NAME_OF_THE_PATH_TO_GROUP',
+        metavar='GROUP_PATH',
         help='String name of the path to the created group, formatted from CSV columns.'
     ),
     parent_group_template: ActionParameter(
@@ -620,10 +620,10 @@ def create_group(
     for entry in entries.as_items():
         from_group = mg.get_canonical_group(glb, parent_group_template.format(**entry))
 
-        path_name = path_name_template.format(**entry)
+        path_name = path_template.format(**entry)
         group_path = from_group.full_path + '/' + path_name
 
-        if group_name_template != None:
+        if group_name_template:
             group_name = group_name_template.format(**entry)
         else:
             group_name = path_name

@@ -121,7 +121,7 @@ def get_canonical_group(glb, group):
     raise Exception("Unexpected object type.")
 
 @retry_on_exception(
-    'Failed to canonicalize a group, will retry...',
+    'Failed to check group existence, will retry...',
     [gitlab.exceptions.GitlabGetError]
 )
 def is_existing_group(glb, group_path):
