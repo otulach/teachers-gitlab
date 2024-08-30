@@ -618,7 +618,13 @@ def create_group(
     ),
 ):
     for entry in entries.as_items():
-        from_group = mg.get_canonical_group(glb, parent_group_template.format(**entry))
+        all_groups = glb.groups.list()
+        parent_group_name = parent_group_template.format(**entry)
+
+        if all_groups.count(parent_group_name) == 0:
+            glb.groups.create({'name': parent_group_name, 'path': parent_group_name})
+
+        from_group = mg.get_canonical_group(glb, parent_group_name)
 
         path_name = path_template.format(**entry)
         group_path = from_group.full_path + '/' + path_name
